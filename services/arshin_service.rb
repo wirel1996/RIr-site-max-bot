@@ -399,7 +399,10 @@ module ArshinService
 
     if is_ktptr && compact_number_for_query.match?(/\A\d+[аa]?\z/i)
       base = compact_number_for_query.sub(/[аa]\z/i, '')
-      number_candidates.unshift("#{base}/#{base}А") unless base.empty?
+      unless base.empty?
+        number_candidates.unshift("#{base}/#{base}А")
+        number_candidates << base unless base == compact_number_for_query
+      end
     elsif !is_ktptr
       paired_base =
         if compact_number_for_query.match?(/\A\d+[гх]\z/)
