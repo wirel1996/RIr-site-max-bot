@@ -25,7 +25,7 @@ export default function BillingHome() {
   })
 
   const createMutation = useMutation({
-    mutationFn: () => billingApi.createObject({ status: 'активный', contract_name: 'Новый объект' }),
+    mutationFn: () => billingApi.createObject({ status: 'активный', contract_name: 'New object' }),
     onSuccess: (created) => {
       setActionError('')
       qc.invalidateQueries({ queryKey: ['billing', 'objects'] })
@@ -82,8 +82,8 @@ export default function BillingHome() {
         <div>
           <h1 className="text-2xl font-bold">ГВС биллинг</h1>
           <p className="text-sm text-gray-600">
-            {data?.sheet ? `Вкладка: ${data.sheet}` : 'Текущая вкладка'}
-            {data ? ` · записей: ${data.total}` : ''}
+            {data?.sheet ? `Лист: ${data.sheet}` : 'Текущий лист'}
+            {data ? ` · records: ${data.total}` : ''}
             {isFetching ? ' · обновление...' : ''}
           </p>
         </div>
@@ -116,26 +116,26 @@ export default function BillingHome() {
                     }
                   }}
                 >
-                  {nextMonthMutation.isPending ? 'Создание месяца...' : 'Создать следующий месяц'}
+                  {nextMonthMutation.isPending ? 'Создание месяца...' : 'Создать след. месяц'}
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50"
                   onClick={() => {
                     if (!currentSheet) return
-                    if (window.confirm(`Удалить месяц «${currentSheet.name}»?`)) {
+                    if (window.confirm(`Удалить месяц "${currentSheet.name}"?`)) {
                       deleteMonthMutation.mutate(currentSheet.id)
                     }
                   }}
                 >
                   Удалить текущий месяц
                 </button>
-                <a className="block px-3 py-2 text-sm hover:bg-gray-100" href={`/api/billing/export?status=${status}`}>Выгрузить файл</a>
+                <a className="block px-3 py-2 text-sm hover:bg-gray-100" href={`/api/billing/export?status=${status}`}>Экспорт</a>
               </div>
             )}
           </div>
           <input
             type="search"
-            placeholder="Поиск по наименованию или адресу..."
+            placeholder="Поиск по имени или адресу..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -161,7 +161,7 @@ export default function BillingHome() {
                 <th className="px-3 py-2 text-left">Адрес</th>
                 <th className="px-3 py-2 text-left">Назначение</th>
                 <th className="px-3 py-2 text-left">След. поверка</th>
-                <th className="px-3 py-2 text-left">Текущие</th>
+                <th className="px-3 py-2 text-left">Текущее</th>
                 <th className="px-3 py-2 text-left">V ГВС</th>
                 <th className="px-3 py-2 w-12"></th>
               </tr>
@@ -187,12 +187,11 @@ export default function BillingHome() {
 
       {data && pageCount > 1 && (
         <div className="flex items-center justify-between">
-          <button type="button" disabled={page === 0} onClick={() => setParams({ page: page - 1 })} className="rounded border bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-100">← Пред.</button>
+          <button type="button" disabled={page === 0} onClick={() => setParams({ page: page - 1 })} className="rounded border bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-100">← Назад</button>
           <span className="text-sm text-gray-600">Страница {page + 1} из {pageCount}</span>
-          <button type="button" disabled={page >= pageCount - 1} onClick={() => setParams({ page: page + 1 })} className="rounded border bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-100">След. →</button>
+          <button type="button" disabled={page >= pageCount - 1} onClick={() => setParams({ page: page + 1 })} className="rounded border bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-100">Вперёд →</button>
         </div>
       )}
     </div>
   )
 }
-

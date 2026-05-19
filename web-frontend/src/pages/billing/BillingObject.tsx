@@ -82,7 +82,7 @@ export default function BillingObjectPage() {
   return (
     <div className="space-y-4 max-w-5xl">
       <nav className="text-sm">
-        <Link to="/billing" className="text-blue-600 hover:underline">← К списку</Link>
+        <Link to="/billing" className="text-blue-600 hover:underline">← Назад к списку</Link>
       </nav>
 
       {!editMode ? (
@@ -97,7 +97,7 @@ export default function BillingObjectPage() {
                 Редактировать
               </button>
               <button type="button" onClick={() => setReadingMode((v) => !v)} className="rounded bg-blue-600 text-white px-3 py-2 text-sm hover:bg-blue-700">
-                Ввести показания
+                Внести показание
               </button>
             </div>
           </div>
@@ -106,27 +106,27 @@ export default function BillingObjectPage() {
             {viewRow('Статус', data.status)}
             {viewRow('Номер договора', data.contract_number)}
             {viewRow('Улица', data.street)}
-            {viewRow('Номер дома', data.house_number)}
+            {viewRow('Дом', data.house_number)}
             {viewRow('Назначение', data.purpose)}
             {viewRow('Назначение 2', data.purpose_2)}
-            {viewRow('Дата проведения сверки показаний', data.reconciliation_date)}
-            {viewRow('Дата следующей поверки', data.poverka_next)}
-            {viewRow('Дата ввода в эксплуатацию', data.commissioned)}
-            {viewRow('Заводской номер счетчика', data.serial)}
-            {viewRow('Дата передачи конечных показаний', data.final_date)}
-            {viewRow('Конечные показания', data.final_value)}
-            {viewRow('Дата передачи текущих показаний', data.current_date)}
-            {viewRow('Текущие показания', data.current_value)}
+            {viewRow('Дата сверки', data.reconciliation_date)}
+            {viewRow('Дата след. поверки', data.poverka_next)}
+            {viewRow('Дата ввода', data.commissioned)}
+            {viewRow('Заводской номер', data.serial)}
+            {viewRow('Дата последних показаний', data.final_date)}
+            {viewRow('Последнее показание', data.final_value)}
+            {viewRow('Дата текущего показания', data.current_date)}
+            {viewRow('Текущее показание', data.current_value)}
             {viewRow('V ГВС', data.volume_gvs)}
             {viewRow('Номер пломбы', data.seal_number)}
-            {viewRow('Дата опломбировки', data.seal_date)}
+            {viewRow('Дата пломбы', data.seal_date)}
             {viewRow('Тип прибора', data.meter_type)}
           </dl>
 
           {readingMode && (
             <form onSubmit={onSaveReading} className="border-t pt-4 flex flex-wrap items-end gap-3">
               <label className="flex flex-col">
-                <span className="text-xs text-gray-500">Текущие показания</span>
+                <span className="text-xs text-gray-500">Текущее показание</span>
                 <input
                   className="rounded border px-2 py-1 text-sm w-44"
                   value={readingValue}
@@ -136,7 +136,7 @@ export default function BillingObjectPage() {
                   autoFocus
                 />
               </label>
-              <div className="text-xs text-gray-500 pb-1">Дата: {todayRu()}</div>
+              <div className="text-xs text-gray-500 pb-1">Date: {todayRu()}</div>
               <button type="submit" className="rounded bg-green-600 text-white px-3 py-2 text-sm hover:bg-green-700" disabled={saveReading.isPending}>
                 {saveReading.isPending ? 'Сохранение...' : 'Сохранить'}
               </button>
@@ -156,24 +156,24 @@ export default function BillingObjectPage() {
                 <option value="неактивный">неактивный</option>
               </select>
             </label>
-            {renderInput('contract_name', 'Наименование по договору')}
+            {renderInput('contract_name', 'Наименование договора')}
             {renderInput('contract_number', 'Номер договора')}
             {renderInput('street', 'Улица')}
-            {renderInput('house_number', 'Номер дома')}
+            {renderInput('house_number', 'Дом')}
             {renderInput('purpose', 'Назначение (1)')}
             {renderInput('purpose_2', 'Назначение (2)')}
-            {renderInput('address', 'Адрес по договору')}
-            {renderInput('reconciliation_date', 'Дата проведения сверки показаний')}
-            {renderInput('poverka_next', 'Дата следующей поверки')}
-            {renderInput('commissioned', 'Дата ввода в эксплуатацию')}
-            {renderInput('serial', 'Заводской номер счетчика')}
-            {renderInput('final_date', 'Дата передачи конечных показаний')}
-            {renderInput('final_value', 'Конечные показания')}
-            {renderInput('current_date', 'Дата передачи текущих показаний')}
-            {renderInput('current_value', 'Текущие показания')}
+            {renderInput('address', 'Адрес договора')}
+            {renderInput('reconciliation_date', 'Дата сверки')}
+            {renderInput('poverka_next', 'Дата след. поверки')}
+            {renderInput('commissioned', 'Дата ввода')}
+            {renderInput('serial', 'Заводской номер')}
+            {renderInput('final_date', 'Дата последних показаний')}
+            {renderInput('final_value', 'Последнее показание')}
+            {renderInput('current_date', 'Дата текущего показания')}
+            {renderInput('current_value', 'Текущее показание')}
             {renderInput('volume_gvs', 'V ГВС')}
             {renderInput('seal_number', 'Номер пломбы')}
-            {renderInput('seal_date', 'Дата опломбировки')}
+            {renderInput('seal_date', 'Дата пломбы')}
             {renderInput('meter_type', 'Тип прибора')}
           </div>
           <div className="flex gap-2">
