@@ -313,7 +313,7 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
                         onClick={() => apply.mutate(item)}
                         className="shrink-0 rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
                       >
-                        {apply.isPending ? '…' : 'Применить и PDF на Я.Диск'}
+                        {apply.isPending ? '…' : 'Применить'}
                       </button>
                     </div>
                   </div>
