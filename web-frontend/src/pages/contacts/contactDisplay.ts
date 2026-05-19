@@ -11,7 +11,7 @@ export const CATEGORY_LABEL: Record<ContactCategory, string> = {
   legal: 'Прочие ЮЛ',
   budget: 'Бюджет',
   iglakovo: 'Иглаково',
-  embedded: 'Встроенные помещения',
+  embedded: 'Встроенные',
   bu2: 'БУ-2',
 }
 
@@ -46,14 +46,14 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
       ]
     case 'gspo':
       return [
-        ['connection_point', 'Точка присоединения', 'input'],
+        ['connection_point', 'Точка подключения', 'input'],
         ['name', 'Наименование', 'input'],
         ['address', 'Адрес', 'input'],
         ['consumer', 'Потребитель', 'input'],
         ['phone', 'Телефон', 'input'],
         ['email', 'Email', 'input'],
         ['postal_address', 'Почтовый адрес', 'input'],
-        ['metering_presence', 'Наличие ПУ', 'yes_no'],
+        ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['disconnected', 'Отключено', 'yes_no'],
         ['identifier', 'Идентификатор', 'input'],
       ]
@@ -61,24 +61,24 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
       return [
         ['consumer', 'Потребитель', 'input'],
         ['address', 'Адрес', 'input'],
-        ['manager', 'Ф.И.О. руководителя', 'input'],
+        ['manager', 'ФИО руководителя', 'input'],
         ['phone', 'Телефон', 'input'],
         ['phone_alt', 'Доп. телефон', 'input'],
         ['email', 'Email', 'input'],
         ['postal_address', 'Почтовый адрес', 'input'],
-        ['metering_presence', 'Наличие ПУ', 'yes_no'],
+        ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['identifier', 'Идентификатор', 'input'],
         ['notes', 'Ответственные лица', 'textarea'],
       ]
     case 'legal':
       return [
         ['name', 'Наименование', 'input'],
-        ['address', 'Место нахождения', 'input'],
-        ['manager', 'Ф.И.О. руководителя', 'input'],
+        ['address', 'Местоположение', 'input'],
+        ['manager', 'ФИО руководителя', 'input'],
         ['phone', 'Телефон', 'input'],
         ['email', 'Email', 'input'],
         ['postal_address', 'Почтовый адрес', 'input'],
-        ['metering_presence', 'Наличие ПУ', 'yes_no'],
+        ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['identifier', 'Идентификатор', 'input'],
         ['notes', 'Ответственные лица', 'textarea'],
       ]
@@ -90,26 +90,26 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
         ['phone', 'Телефон', 'input'],
         ['email', 'Email', 'input'],
         ['postal_address', 'Почтовый адрес', 'input'],
-        ['metering_presence', 'Наличие ПУ', 'yes_no'],
+        ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['identifier', 'Идентификатор', 'input'],
         ['notes', 'Ответственные лица', 'textarea'],
       ]
     case 'iglakovo':
       return [
-        ['name', 'Название', 'input'],
-        ['manager', 'Ф.И.О. руководителя', 'input'],
+        ['name', 'Наименование', 'input'],
+        ['manager', 'ФИО руководителя', 'input'],
         ['address', 'Адрес', 'input'],
         ['phone', 'Телефон для уведомлений', 'input'],
         ['email', 'Email', 'input'],
         ['postal_address', 'Почтовый адрес', 'input'],
-        ['metering_presence', 'Наличие ПУ', 'yes_no'],
+        ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['identifier', 'Идентификатор', 'input'],
         ['notes', 'Ответственные лица', 'textarea'],
       ]
     case 'embedded':
       return [
         ['name', 'Наименование', 'input'],
-        ['manager', 'Ф.И.О. руководителя', 'input'],
+        ['manager', 'ФИО руководителя', 'input'],
         ['address', 'Адрес помещения', 'input'],
         ['phone', 'Телефон', 'input'],
         ['email', 'Email', 'input'],
@@ -120,10 +120,10 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
     case 'bu2':
       return [
         ['name', 'Наименование', 'input'],
-        ['manager', 'Ф.И.О. руководителя', 'input'],
+        ['manager', 'ФИО руководителя', 'input'],
         ['address', 'Адрес', 'input'],
         ['notes', 'Ответственные лица', 'textarea'],
-        ['metering_presence', 'Наличие ПУ', 'yes_no'],
+        ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['postal_address', 'Почтовый адрес', 'input'],
         ['identifier', 'Идентификатор', 'input'],
       ]
@@ -142,4 +142,3 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
       ]
   }
 }
-

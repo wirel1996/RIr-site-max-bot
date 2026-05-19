@@ -6,34 +6,34 @@ import { meteringApi, type WaterRegistryRecord } from '../../api/metering'
 
 const FIELDS: Array<[keyof WaterRegistryRecord, string]> = [
   ['point_number', '№ точки'],
-  ['actual_connection_point', 'Фактическая точка присоединения'],
+  ['actual_connection_point', 'Фактическая точка подключения'],
   ['connected', 'Подключено'],
   ['point_filter', 'Фильтр точки'],
-  ['gspo_count_in_point', 'Количество ГСПО в точке'],
+  ['gspo_count_in_point', 'Кол-во ГСПО в точке'],
   ['gspo_name', 'Наименование ГСПО'],
   ['standalone_address', 'Адрес'],
-  ['leader_name', 'Ф.И.О. руководителя'],
+  ['leader_name', 'ФИО руководителя'],
   ['phone', 'Телефон'],
-  ['metering_presence', 'Наличие ПУ'],
-  ['uute_verification_until', 'Поверка приборов учета до'],
+  ['metering_presence', 'Наличие приборов учёта'],
+  ['uute_verification_until', 'Срок поверки УУТЭ'],
   ['application', 'Заявление'],
-  ['no_debt', 'Задолженности нет'],
+  ['no_debt', 'Отсутствие задолженности'],
   ['power_of_attorney', 'Доверенность'],
   ['contract', 'Договор'],
   ['uute', 'УУТЭ'],
-  ['uute_verified', 'УУТЭ поверено'],
-  ['third_party_disconnection', 'Отключение сторонних'],
-  ['third_party_disconnection_note', 'Акт отключения сторонних'],
+  ['uute_verified', 'УУТЭ поверен'],
+  ['third_party_disconnection', 'Отключение сторонней организацией'],
+  ['third_party_disconnection_note', 'Акт отключения сторонней организацией'],
   ['payment', 'Оплата'],
-  ['water_supplied', 'Подана вода на точку'],
-  ['all_except_payment', 'Все кроме оплаты'],
-  ['verdict', 'Вердикт'],
+  ['water_supplied', 'Вода подана'],
+  ['all_except_payment', 'Всё кроме оплаты'],
+  ['verdict', 'Заключение'],
   ['note', 'Примечание'],
   ['tf_in_ts', 'ТФ в ТС'],
   ['tf_in_ts_date', 'Дата ТФ в ТС'],
   ['connection_act', 'Акт подключения'],
-  ['illegal_connection_2025', 'Выявлены самовольные подключения 2025'],
-  ['illegal_connection_2026', 'Выявлены самовольные подключения 2026'],
+  ['illegal_connection_2025', 'Незаконное подключение 2025'],
+  ['illegal_connection_2026', 'Незаконное подключение 2026'],
 ]
 
 function contactLabel(contact: Contact) {
@@ -143,14 +143,14 @@ export default function WaterRegistryDetail() {
             }}
             className="w-fit rounded border bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
           >
-            {isEditing ? 'Отменить' : 'Редактировать'}
+            {isEditing ? 'Отмена' : 'Редактировать'}
           </button>
         </div>
       </div>
 
       {isEditing && (
         <form onSubmit={onSubmit} className="space-y-4 rounded-lg bg-white p-5 shadow">
-          <h2 className="font-semibold">Редактирование заявления</h2>
+          <h2 className="font-semibold">Редактирование заявки</h2>
           <div className="grid gap-3 md:grid-cols-2">
             {FIELDS.map(([key, label]) => (
               <label key={key} className="block">
@@ -214,7 +214,7 @@ export default function WaterRegistryDetail() {
             {data.contact_id ? (
               <Link to={`/contacts/${data.contact_id}`} className="text-blue-700 hover:underline">открыть</Link>
             ) : (
-              <span className="text-gray-500">не связан</span>
+              <span className="text-gray-500">не привязан</span>
             )}
           </p>
           {data.uute_id && (
@@ -232,7 +232,7 @@ export default function WaterRegistryDetail() {
               setContactQuery(event.target.value)
               setSelectedContactId('')
             }}
-            placeholder="Найти контакт по названию, адресу или UID"
+            placeholder="Поиск контакта по имени, адресу или UID"
             className="rounded border px-3 py-2 text-sm"
           />
           <select
@@ -251,12 +251,12 @@ export default function WaterRegistryDetail() {
             onClick={() => linkContactMutation.mutate(Number(selectedContactId))}
             className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {linkContactMutation.isPending ? 'Связываю...' : 'Связать'}
+            {linkContactMutation.isPending ? 'Привязка...' : 'Привязать'}
           </button>
         </div>
         {linkContactMutation.error && (
           <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            Не удалось связать контакт.
+            Не удалось привязать контакт.
           </div>
         )}
       </section>

@@ -25,7 +25,7 @@ export default function Profile() {
       await authApi.updateProfile({ name, email, position, password: nextPassword || undefined })
       setPassword('')
       setPasswordConfirm('')
-      setMsg('Профиль обновлен.')
+      setMsg('Профиль обновлён.')
     } catch (e: any) {
       setMsg(e?.message || 'Не удалось обновить профиль.')
     } finally {
@@ -57,7 +57,7 @@ export default function Profile() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Новый пароль (если нужно)"
+          placeholder="Новый пароль (необязательно)"
         />
         <input
           className="w-full rounded border px-3 py-2 text-sm"

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { contactsApi, type Contact, type ContactCategory } from '../../api/contacts'
@@ -15,14 +15,14 @@ const EDITABLE_COLUMNS: Array<[keyof WaterRegistryRecord, string, number]> = [
   ['uute_verified', 'УУТЭ поверено', 90],
   ['third_party_disconnection', 'Отключение сторонних', 104],
   ['payment', 'Оплата', 84],
-  ['water_supplied', 'Подана вода на точку', 110],
+  ['water_supplied', 'Водоснабжение', 110],
   ['verdict', 'Вердикт', 84],
   ['note', 'Примечание', 80],
   ['all_except_payment', 'Все кроме оплаты', 80],
   ['tf_in_ts', 'ТФ в ТС', 110],
   ['connection_act', 'Акт подключения', 120],
-  ['illegal_connection_2025', 'Самовольное подключение 2025', 110],
-  ['illegal_connection_2026', 'Самовольное подключение 2026', 110],
+  ['illegal_connection_2025', 'Незаконное подключение 2025', 110],
+  ['illegal_connection_2026', 'Незаконное подключение 2026', 110],
 ]
 
 const DISPLAY_COLUMNS = (() => {
@@ -58,7 +58,7 @@ const YES_NO_FIELDS = new Set<keyof WaterRegistryRecord>([
 
 const CREATE_FIELDS: Array<[keyof WaterRegistryRecord, string, string]> = [
   ['actual_connection_point', 'Фактическая точка', 'Например 184'],
-  ['gspo_name', 'Название', 'ГСПО ...'],
+  ['gspo_name', 'Наименование', 'ГСПО ...'],
   ['standalone_address', 'Адрес', 'Адрес объекта'],
   ['leader_name', 'Председатель', 'ФИО'],
   ['phone', 'Телефон', 'Телефон'],
@@ -300,8 +300,8 @@ function YesNoCell({
       className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm outline-none hover:border-blue-300 focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-50"
     >
       <option value="">—</option>
-      <option value="да">да</option>
-      <option value="нет">нет</option>
+      <option value="да">Да</option>
+      <option value="нет">Нет</option>
     </select>
   )
 }
@@ -512,7 +512,7 @@ export default function WaterRegistry() {
       setMessage(`Отключения: обработано ${result.disconnected_rows}, обновлено ${result.matched}.${extra}`)
       await queryClient.invalidateQueries({ queryKey: ['metering', 'water'] })
     },
-    onError: (err: { message?: string }) => setMessage(err.message || 'Не удалось импортировать отключения.'),
+    onError: (err: { message?: string }) => setMessage(err.message || 'Не удалось загрузить файл отключений.'),
   })
 
   const createMutation = useMutation({
@@ -614,16 +614,16 @@ export default function WaterRegistry() {
       <nav className="text-sm">
         {!paymentOnly && (
           <Link to="/metering" className="text-blue-600 hover:underline">
-            ← Приборы учета
+            ← Приборы учёта
           </Link>
         )}
       </nav>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Летняя вода ГСПО</h1>
+          <h1 className="text-2xl font-bold">Вода на лето ГСПО</h1>
           <p className="text-sm text-gray-600">
-            {data ? `Всего записей: ${data.total}` : 'Реестр заявлений на подачу воды'}
+            {data ? `Всего записей: ${data.total}` : 'Реестр заявок на водоснабжение'}
             {isFetching ? ' · обновление...' : ''}
           </p>
           {data?.last_import && (
@@ -641,7 +641,7 @@ export default function WaterRegistry() {
               setPoint(event.target.value)
               updateParams({ point: event.target.value })
             }}
-            placeholder="Фактическая точка присоединения"
+            placeholder="Фактическая точка подключения"
             className="w-full rounded border bg-white px-3 py-2 text-sm lg:w-32"
           />
           <input
@@ -679,11 +679,11 @@ export default function WaterRegistry() {
                 page: 0,
               })
             }}
-            placeholder="Название, адрес, председатель, телефон..."
+            placeholder="Наименование, адрес, председатель, телефон..."
             className="w-full rounded border bg-white px-3 py-2 pr-10 text-sm lg:w-96"
           />
           <button
-            title="Фильтр по дате оплаты или заявления"
+            title="Filter by payment/application date"
             type="button"
             onClick={() => setDateFilterOpen(true)}
             className="-ml-8 inline-flex items-center text-gray-500 hover:text-gray-700"
@@ -695,7 +695,7 @@ export default function WaterRegistry() {
             onClick={() => setDateFilterOpen(true)}
             className="hidden rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
-            Фильтр дат
+            Фильтр по дате
           </button>
           <input
             type="date"
@@ -751,14 +751,14 @@ export default function WaterRegistry() {
                     }}
                     className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-gray-100"
                   >
-                    Скачать телефонограмму
+                    Выгрузить телефонограмму
                   </button>
                   <a
                     href={meteringApi.waterDisconnectedExportUrl()}
                     className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-gray-100"
                     onClick={() => setActionsOpen(false)}
                   >
-                    Скачать реестр отключенных
+                    Выгрузить реестр отключений
                   </a>
                   <button
                     type="button"
@@ -777,7 +777,7 @@ export default function WaterRegistry() {
                   </button>
                   {(user?.role === 'admin' || user?.role === 'full') && (
                     <label className="block w-full cursor-pointer rounded px-3 py-2 text-left text-sm hover:bg-gray-100">
-                      {importDisconnectionsMutation.isPending ? 'Загрузка...' : 'Загрузить реестр отключенных'}
+                      {importDisconnectionsMutation.isPending ? 'Загрузка...' : 'Загрузить реестр отключений'}
                       <input
                         type="file"
                         accept=".xlsx"
@@ -787,7 +787,7 @@ export default function WaterRegistry() {
                           const file = event.target.files?.[0]
                           if (file) {
                             if (!isMainFileName(file.name)) {
-                              setMessage('Неверный файл: в названии должно быть "Основной файл".')
+                              setMessage('Неверный файл: имя должно содержать "Main file".')
                             } else {
                               importDisconnectionsMutation.mutate(file)
                             }
@@ -819,7 +819,7 @@ export default function WaterRegistry() {
               href={meteringApi.waterPhoneogramUrl(phoneogramFrom, phoneogramTo, phoneogramSigner)}
               className="inline-flex items-center justify-center rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
             >
-              Скачать телефонограмму
+              Выгрузить телефонограмму
             </a>
           )}
           {false && !paymentOnly && (
@@ -840,7 +840,7 @@ export default function WaterRegistry() {
           )}
           {false && user?.role === 'admin' && (
             <label className="inline-flex cursor-pointer items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              {importDisconnectionsMutation.isPending ? 'Загрузка...' : 'Загрузить реестр отключенных'}
+              {importDisconnectionsMutation.isPending ? 'Загрузка...' : 'Загрузить реестр отключений'}
               <input
                 type="file"
                 accept=".xlsx"
@@ -954,7 +954,7 @@ export default function WaterRegistry() {
                 }}
                 className="rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
-                Сброс
+                Сбросить
               </button>
               <button
                 type="button"
@@ -999,7 +999,7 @@ export default function WaterRegistry() {
       {phoneogramOpen && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-xl">
-            <h2 className="mb-3 text-base font-semibold">Скачать телефонограмму</h2>
+            <h2 className="mb-3 text-base font-semibold">Выгрузка телефонограммы</h2>
             <div className="space-y-3">
               <label className="block text-sm">
                 <span className="mb-1 block text-gray-700">Дата с</span>
@@ -1104,7 +1104,7 @@ export default function WaterRegistry() {
                       setContactQuery(event.target.value)
                       setSelectedContactId('')
                     }}
-                    placeholder="Название, адрес, председатель, UID"
+                    placeholder="Наименование, адрес, председатель, UID"
                     className="w-full rounded border bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                   />
                   {contactQuery.trim().length >= 2 && (
@@ -1151,8 +1151,8 @@ export default function WaterRegistry() {
                   className="w-full rounded border bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                 >
                   <option value="">—</option>
-                  <option value="да">да</option>
-                  <option value="нет">нет</option>
+                  <option value="да">Да</option>
+                  <option value="нет">Нет</option>
                 </select>
               </label>
             </div>
@@ -1192,7 +1192,7 @@ export default function WaterRegistry() {
             <thead className="bg-gray-100 text-left">
               <tr>
                 <th className="break-words px-1.5 py-1.5">Факт. точка</th>
-                <th className="break-words px-2 py-1.5">Название</th>
+                <th className="break-words px-2 py-1.5">Наименование</th>
                 <th className="break-words px-1.5 py-1.5">Адрес</th>
                 <th className="break-words px-1.5 py-1.5">Председатель</th>
                 {DISPLAY_COLUMNS.map(([key, label]) => (
@@ -1299,7 +1299,7 @@ export default function WaterRegistry() {
             onClick={() => updateParams({ page: page - 1 })}
             className="rounded border bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-100"
           >
-            ← Пред.
+            ← Назад
           </button>
           <span className="text-sm text-gray-600">Страница {page + 1} из {pageCount}</span>
           <button
@@ -1308,10 +1308,15 @@ export default function WaterRegistry() {
             onClick={() => updateParams({ page: page + 1 })}
             className="rounded border bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-100"
           >
-            След. →
+            Далее →
           </button>
         </div>
       )}
     </div>
   )
 }
+
+
+
+
+

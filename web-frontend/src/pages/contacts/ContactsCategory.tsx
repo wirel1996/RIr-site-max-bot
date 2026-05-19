@@ -36,7 +36,7 @@ export default function ContactsCategory() {
   if (!category) {
     return (
       <div>
-        Категория не указана. <Link to="/contacts" className="text-blue-600">К списку</Link>
+        Категория не выбрана. <Link to="/contacts" className="text-blue-600">Назад к списку</Link>
       </div>
     )
   }
@@ -80,13 +80,13 @@ export default function ContactsCategory() {
             onClick={() => setIsAdding((value) => !value)}
             className="inline-flex items-center justify-center rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
           >
-            {isAdding ? 'Отменить добавление' : 'Добавить контакт'}
+            {isAdding ? 'Отмена' : 'Добавить контакт'}
           </button>
           <a
             href={`/api/contacts/category/${category}/export`}
             className="inline-flex items-center justify-center rounded border bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
           >
-            Скачать Excel
+            Экспорт Excel
           </a>
         </div>
       </div>
@@ -159,23 +159,23 @@ export default function ContactsCategory() {
           setFilter(e.target.value)
           if (page !== 0) setSearchParams({ page: '0' })
         }}
-        placeholder="Поиск внутри категории..."
+        placeholder="Поиск по категории..."
         className="w-full rounded border bg-white px-3 py-2 text-sm"
       />
 
       {data.records.length === 0 ? (
-        <p className="bg-white rounded shadow p-4">В этой категории нет записей.</p>
+        <p className="bg-white rounded shadow p-4">Нет записей в этой категории.</p>
       ) : records.length === 0 ? (
-        <p className="bg-white rounded shadow p-4">По фильтру ничего не найдено.</p>
+        <p className="bg-white rounded shadow p-4">Ничего не найдено по фильтру.</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
                 <th className="px-3 py-2 text-left w-12">#</th>
-                <th className="px-3 py-2 text-left w-64">Название</th>
+                <th className="px-3 py-2 text-left w-64">Наименование</th>
                 <th className="px-3 py-2 text-left">Адрес</th>
-                {showManager && <th className="px-3 py-2 text-left">ФИО руководителя</th>}
+                {showManager && <th className="px-3 py-2 text-left">Руководитель</th>}
                 {showResponsible && <th className="px-3 py-2 text-left">Ответственные лица</th>}
                 <th className="px-3 py-2 text-left">Телефон</th>
                 <th className="px-3 py-2 w-12"></th>
@@ -194,7 +194,7 @@ export default function ContactsCategory() {
                       {contactTitle(r)}
                     </Link>
                     {r.sync_status === 'not_matched' && (
-                      <div className="mt-1 text-xs text-red-700">Синхронизация не прошла</div>
+                      <div className="mt-1 text-xs text-red-700">Синхронизация не удалась</div>
                     )}
                   </td>
                   <td className="px-3 py-2 text-gray-700">
@@ -238,7 +238,7 @@ export default function ContactsCategory() {
             onClick={() => setSearchParams({ page: String(page - 1) })}
             className="px-3 py-1.5 bg-white border rounded disabled:opacity-40 hover:bg-gray-100"
           >
-            ← Пред.
+            ← Назад
           </button>
           <span className="text-sm text-gray-600">
             Страница {page + 1} из {pageCount}
@@ -248,10 +248,11 @@ export default function ContactsCategory() {
             onClick={() => setSearchParams({ page: String(page + 1) })}
             className="px-3 py-1.5 bg-white border rounded disabled:opacity-40 hover:bg-gray-100"
           >
-            След. →
+            Вперёд →
           </button>
         </div>
       )}
     </div>
   )
 }
+

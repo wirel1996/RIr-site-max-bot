@@ -65,21 +65,21 @@ export default function ContactsHome() {
           >
             Создать категорию
           </button>
-        <form onSubmit={onSearch} className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Поиск..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded border px-3 py-1.5 sm:w-64"
-          />
-          <button
-            type="submit"
-            className="rounded bg-blue-600 px-3 text-white hover:bg-blue-700"
-          >
-            Найти
-          </button>
-        </form>
+          <form onSubmit={onSearch} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Поиск..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full rounded border px-3 py-1.5 sm:w-64"
+            />
+            <button
+              type="submit"
+              className="rounded bg-blue-600 px-3 text-white hover:bg-blue-700"
+            >
+              Найти
+            </button>
+          </form>
         </div>
       </div>
 
@@ -146,7 +146,7 @@ export default function ContactsHome() {
       {isLoading && <div className="text-gray-500">Загрузка...</div>}
       {error && (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-red-800">
-          Ошибка загрузки. Проверьте, что API работает.
+          Ошибка загрузки. Проверьте API.
         </div>
       )}
 
@@ -171,14 +171,14 @@ export default function ContactsHome() {
                   }}
                   className="rounded border bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
                 >
-                  Изменить
+                  Редактировать
                 </button>
                 {!cat.system && cat.count === 0 && (
                   <button
                     type="button"
                     disabled={deleteCategory.isPending}
                     onClick={() => {
-                      if (window.confirm(`Удалить категорию "${cat.label}"?`)) deleteCategory.mutate(cat)
+                      if (window.confirm(`Delete category "${cat.label}"?`)) deleteCategory.mutate(cat)
                     }}
                     className="rounded border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40"
                   >

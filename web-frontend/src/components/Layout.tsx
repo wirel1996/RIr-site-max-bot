@@ -8,11 +8,11 @@ const navItems = [
 ]
 
 const serviceItems = [
-  { to: '/arshin', label: 'АРШИН' },
+  { to: '/arshin', label: 'ARSHIN' },
   { to: '/metering', label: 'Приборы учета' },
   { to: '/summer-water', label: 'Вода на лето ГСПО', waterAllowed: true },
-  { to: '/billing', label: 'Биллинг ГВС', billingOnly: true },
-  { to: '/calculations', label: 'Расчёты' },
+  { to: '/billing', label: 'ГВС биллинг', billingOnly: true },
+  { to: '/calculations', label: 'Расчеты' },
   { to: '/algorithms', label: 'Алгоритмы' },
   { to: '/admin', label: 'Админка', adminOnly: true },
 ]
@@ -26,11 +26,7 @@ export default function Layout() {
   const wide = wideRoutes.some((r) => location.pathname === r || location.pathname.startsWith(r + '/'))
   const containerClass = wide ? 'w-full' : 'max-w-6xl mx-auto'
 
-  const visibleNavItems = navItems.filter(() => {
-    if (user?.role === 'water_payment') return false
-    return true
-  })
-
+  const visibleNavItems = navItems.filter(() => user?.role !== 'water_payment')
   const visibleServiceItems = serviceItems.filter((item) => {
     if (user?.role === 'water_payment') return item.waterAllowed === true
     if (item.adminOnly && user?.role !== 'admin') return false
@@ -52,7 +48,7 @@ export default function Layout() {
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6 flex-wrap">
           <Link reloadDocument to="/" className="font-bold text-lg whitespace-nowrap">
-            🛠 Сервис ОКЭ
+            Сервис ОКЭ
           </Link>
           <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             {visibleNavItems.map((item) => (
@@ -62,9 +58,7 @@ export default function Layout() {
                 reloadDocument
                 end={item.exact}
                 className={({ isActive }) =>
-                  isActive
-                    ? 'text-blue-700 font-medium'
-                    : 'text-gray-600 hover:text-gray-900'
+                  isActive ? 'text-blue-700 font-medium' : 'text-gray-600 hover:text-gray-900'
                 }
               >
                 {item.label}
@@ -113,12 +107,6 @@ export default function Layout() {
       <main className={`flex-1 w-full ${containerClass} px-3 sm:px-4 py-4 sm:py-6`}>
         <Outlet />
       </main>
-
-      {!wide && (
-        <footer className="max-w-6xl mx-auto px-4 py-4 text-xs text-gray-400 text-center">
-          .
-        </footer>
-      )}
     </div>
   )
 }

@@ -21,10 +21,10 @@ export default function ContactsSearch() {
         </Link>
       </nav>
 
-      <h1 className="text-2xl font-bold">Поиск: «{query}»</h1>
+      <h1 className="text-2xl font-bold">Поиск: "{query}"</h1>
 
-      {query.length < 2 && <p>Введите минимум 2 символа в строке поиска.</p>}
-      {isLoading && <div className="text-gray-500">Ищу...</div>}
+      {query.length < 2 && <p>Введите минимум 2 символа для поиска.</p>}
+      {isLoading && <div className="text-gray-500">Поиск...</div>}
 
       {data && data.records.length === 0 && <p>Ничего не найдено.</p>}
 
@@ -37,7 +37,7 @@ export default function ContactsSearch() {
                 <tr>
                   <th className="px-3 py-2 text-left w-12">#</th>
                   <th className="px-3 py-2 text-left">Категория</th>
-                  <th className="px-3 py-2 text-left">Название</th>
+                  <th className="px-3 py-2 text-left">Наименование</th>
                   <th className="px-3 py-2 text-left">Адрес</th>
                   <th className="px-3 py-2 text-left">Телефон</th>
                   <th className="px-3 py-2 w-12"></th>
@@ -48,9 +48,7 @@ export default function ContactsSearch() {
                   <tr key={r.id} className="border-t hover:bg-gray-50">
                     <td className="px-3 py-2 text-gray-500">{i + 1}</td>
                     <td className="px-3 py-2 text-xs">
-                      <span className="bg-gray-200 rounded px-1.5 py-0.5">
-                        {categoryLabel(r.category)}
-                      </span>
+                      <span className="bg-gray-200 rounded px-1.5 py-0.5">{categoryLabel(r.category)}</span>
                     </td>
                     <td className="px-3 py-2">
                       <Link
@@ -61,9 +59,7 @@ export default function ContactsSearch() {
                         {contactTitle(r)}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
-                      {contactAddress(r) || <span className="text-gray-400">—</span>}
-                    </td>
+                    <td className="px-3 py-2 text-gray-700">{contactAddress(r) || <span className="text-gray-400">—</span>}</td>
                     <td className="px-3 py-2">
                       {contactPhone(r) ? (
                         <a href={`tel:${contactPhone(r)}`} className="text-blue-600 hover:underline">

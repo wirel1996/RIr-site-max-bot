@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../../api/admin'
 import { useAuth } from '../../contexts/AuthContext'
@@ -71,14 +71,14 @@ export default function AdminUsers() {
     mutationFn: () => adminApi.createUser(createForm),
     onSuccess: async ({ user }) => {
       setCreateForm({ login: '', name: '', email: '', position: '', password: '', role: 'full' })
-      setMessage(`Created: ${user.login}`)
+      setMessage(`Создан: ${user.login}`)
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Create failed'),
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось создать'),
   })
   const updateMutation = useMutation({
     mutationFn: () => {
-      if (!editForm) throw new Error('User not selected')
+      if (!editForm) throw new Error('Пользователь не выбран')
       return adminApi.updateUser(editForm.originalLogin, {
         login: editForm.login,
         name: editForm.name,
@@ -90,19 +90,19 @@ export default function AdminUsers() {
     },
     onSuccess: async ({ user }) => {
       setEditForm((prev) => (prev ? { ...prev, originalLogin: user.login, login: user.login, name: user.name, email: user.email || '', position: user.position || '', role: user.role, password: '' } : prev))
-      setMessage(`Updated: ${user.login}`)
+      setMessage(`Обновлён: ${user.login}`)
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Update failed'),
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось обновить'),
   })
   const deleteMutation = useMutation({
     mutationFn: (login: string) => adminApi.deleteUser(login),
     onSuccess: async () => {
       setEditForm(null)
-      setMessage('Deleted.')
+      setMessage('Удалён.')
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Delete failed'),
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось удалить'),
   })
   const waterNotifyMutation = useMutation({
     mutationFn: (ids: string[]) => adminApi.updateWaterPaymentNotifyUsers(ids),
@@ -123,42 +123,42 @@ export default function AdminUsers() {
   const clearMaxChatMutation = useMutation({
     mutationFn: (userId: string) => adminApi.clearMaxUserChatId(userId),
     onSuccess: async () => {
-      setMessage('chat_id removed.')
+      setMessage('chat_id удалён.')
       await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Remove failed'),
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось удалить'),
   })
   const bindJournalSubMutation = useMutation({
     mutationFn: ({ userId, journalName }: { userId: string; journalName: string }) => adminApi.bindJournalSubscription(userId, journalName),
     onSuccess: async () => {
-      setMessage('Journal subscription binding updated.')
+      setMessage('Привязка подписки журнала обновлена.')
       await queryClient.invalidateQueries({ queryKey: ['admin', 'journal-subs'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Binding update failed'),
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось обновить привязку'),
   })
   const dailyTimeMutation = useMutation({
     mutationFn: (time: string) => adminApi.updateDailyTasksNotifyTime(time),
     onSuccess: async () => {
-      setMessage('Время утренней рассылки обновлено.')
+      setMessage(t.messages.dailyTimeUpdated)
       await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось обновить время рассылки.'),
+    onError: (e: { message?: string }) => setMessage(e.message || t.messages.dailyTimeUpdateFailed),
   })
   const billingCreatorsMutation = useMutation({
     mutationFn: (logins: string[]) => adminApi.updateBillingMonthCreators(logins),
     onSuccess: async () => {
-      setMessage('Права на создание месяца обновлены.')
+      setMessage(t.messages.billingCreatorsUpdated)
       await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось обновить права.'),
+    onError: (e: { message?: string }) => setMessage(e.message || t.messages.billingCreatorsUpdateFailed),
   })
   const dbBackupMutation = useMutation({
     mutationFn: (payload: { enabled: boolean; email: string; time: string; notify_user_id: string }) => adminApi.updateDbBackupSettings(payload),
     onSuccess: async () => {
-      setMessage('Настройки ежедневного бэкапа обновлены.')
+      setMessage(t.messages.backupSettingsUpdated)
       await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
     },
-    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось обновить настройки бэкапа.'),
+    onError: (e: { message?: string }) => setMessage(e.message || t.messages.backupSettingsFailed),
   })
 
   return (
@@ -182,7 +182,7 @@ export default function AdminUsers() {
               <input value={createForm.login} onChange={(e) => setCreateForm((p) => ({ ...p, login: e.target.value }))} placeholder={t.users.login} className="rounded border px-3 py-2 text-sm" required />
               <input value={createForm.name} onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))} placeholder={t.users.name} className="rounded border px-3 py-2 text-sm" />
               <input value={createForm.email} onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="rounded border px-3 py-2 text-sm" />
-              <input value={createForm.position} onChange={(e) => setCreateForm((p) => ({ ...p, position: e.target.value }))} placeholder="Должность" className="rounded border px-3 py-2 text-sm" />
+              <input value={createForm.position} onChange={(e) => setCreateForm((p) => ({ ...p, position: e.target.value }))} placeholder={t.users.position} className="rounded border px-3 py-2 text-sm" />
               <input value={createForm.password} onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))} placeholder={t.users.password} type="password" minLength={8} className="rounded border px-3 py-2 text-sm" required />
               <select value={createForm.role} onChange={(e) => setCreateForm((p) => ({ ...p, role: e.target.value as Role }))} className="rounded border px-3 py-2 text-sm">
                 <option value="full">{t.users.roles.full}</option><option value="limited">{t.users.roles.limited}</option><option value="water_payment">{t.users.roles.water_payment}</option><option value="admin">{t.users.roles.admin}</option>
@@ -193,7 +193,7 @@ export default function AdminUsers() {
           <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
             <section className="overflow-hidden rounded-lg bg-white shadow">
               <div className="border-b px-4 py-3"><h2 className="text-lg font-semibold">{t.users.listTitle}</h2></div>
-              <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-gray-100 text-left"><tr><th className="px-3 py-2">{t.users.login}</th><th className="px-3 py-2">{t.users.name}</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Должность</th><th className="px-3 py-2">{t.users.role}</th><th className="px-3 py-2">{t.users.lastActivity}</th><th className="px-3 py-2"></th></tr></thead><tbody>{users.map((u) => <tr key={u.login} className="border-t"><td className="px-3 py-2">{u.login}</td><td className="px-3 py-2">{u.name || '-'}</td><td className="px-3 py-2">{u.email || '-'}</td><td className="px-3 py-2">{u.position || '-'}</td><td className="px-3 py-2">{roleLabel(u.role)}</td><td className="px-3 py-2">{formatTime(u.last_seen_at || u.last_login_at)}</td><td className="px-3 py-2 text-right"><button onClick={() => setEditForm({ originalLogin: u.login, login: u.login, name: u.name || u.login, email: u.email || '', position: u.position || '', password: '', role: u.role })} className="text-blue-700 hover:underline">{t.users.edit}</button></td></tr>)}</tbody></table></div>
+              <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-gray-100 text-left"><tr><th className="px-3 py-2">{t.users.login}</th><th className="px-3 py-2">{t.users.name}</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">{t.users.position}</th><th className="px-3 py-2">{t.users.role}</th><th className="px-3 py-2">{t.users.lastActivity}</th><th className="px-3 py-2"></th></tr></thead><tbody>{users.map((u) => <tr key={u.login} className="border-t"><td className="px-3 py-2">{u.login}</td><td className="px-3 py-2">{u.name || '-'}</td><td className="px-3 py-2">{u.email || '-'}</td><td className="px-3 py-2">{u.position || '-'}</td><td className="px-3 py-2">{roleLabel(u.role)}</td><td className="px-3 py-2">{formatTime(u.last_seen_at || u.last_login_at)}</td><td className="px-3 py-2 text-right"><button onClick={() => setEditForm({ originalLogin: u.login, login: u.login, name: u.name || u.login, email: u.email || '', position: u.position || '', password: '', role: u.role })} className="text-blue-700 hover:underline">{t.users.edit}</button></td></tr>)}</tbody></table></div>
             </section>
             <section className="rounded-lg bg-white p-4 shadow">
               <h2 className="mb-3 text-lg font-semibold">{t.users.editTitle}</h2>
@@ -201,7 +201,7 @@ export default function AdminUsers() {
                 <input value={editForm.login} onChange={(e) => setEditForm((p) => p ? { ...p, login: e.target.value } : p)} className="w-full rounded border px-3 py-2 text-sm" />
                 <input value={editForm.name} onChange={(e) => setEditForm((p) => p ? { ...p, name: e.target.value } : p)} className="w-full rounded border px-3 py-2 text-sm" />
                 <input value={editForm.email} onChange={(e) => setEditForm((p) => p ? { ...p, email: e.target.value } : p)} className="w-full rounded border px-3 py-2 text-sm" placeholder="Email" />
-                <input value={editForm.position} onChange={(e) => setEditForm((p) => p ? { ...p, position: e.target.value } : p)} className="w-full rounded border px-3 py-2 text-sm" placeholder="Должность" />
+                <input value={editForm.position} onChange={(e) => setEditForm((p) => p ? { ...p, position: e.target.value } : p)} className="w-full rounded border px-3 py-2 text-sm" placeholder={t.users.position} />
                 <input value={editForm.password} onChange={(e) => setEditForm((p) => p ? { ...p, password: e.target.value } : p)} type="password" placeholder={t.users.newPassword} className="w-full rounded border px-3 py-2 text-sm" />
                 <select value={editForm.role} onChange={(e) => setEditForm((p) => p ? { ...p, role: e.target.value as Role } : p)} className="w-full rounded border px-3 py-2 text-sm"><option value="full">{t.users.roles.full}</option><option value="limited">{t.users.roles.limited}</option><option value="water_payment">{t.users.roles.water_payment}</option><option value="admin">{t.users.roles.admin}</option></select>
                 <div className="flex gap-2"><button type="submit" className="rounded bg-blue-600 px-4 py-2 text-sm text-white">{t.users.save}</button><button type="button" disabled={!canDeleteSelected} onClick={() => { if (window.confirm(`${t.messages.deleteConfirm} ${editForm.login}?`)) deleteMutation.mutate(editForm.login) }} className="rounded border border-red-200 px-4 py-2 text-sm text-red-700">{t.users.remove}</button></div>
@@ -218,7 +218,7 @@ export default function AdminUsers() {
             <div className="space-y-2">{maxUsers.filter((m) => m.has_chat).map((m) => <label key={`wp-${m.user_id}`} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedWaterNotifyIds.includes(m.user_id)} onChange={(e) => { const next = e.target.checked ? [...selectedWaterNotifyIds, m.user_id] : selectedWaterNotifyIds.filter((id) => id !== m.user_id); waterNotifyMutation.mutate([...new Set(next)]) }} /><span>{m.name || m.user_id}</span></label>)}</div>
           </section>
           <section className="rounded-lg bg-white p-4 shadow">
-            <h2 className="mb-3 text-lg font-semibold">Время утренней рассылки задач</h2>
+            <h2 className="mb-3 text-lg font-semibold">{t.notifications.dailyTasksTimeTitle}</h2>
             <div className="flex items-center gap-2">
               <input
                 type="time"
@@ -229,12 +229,12 @@ export default function AdminUsers() {
                   if (next !== dailyNotifyTime) dailyTimeMutation.mutate(next)
                 }}
               />
-              <span className="text-xs text-gray-600">Томск</span>
+              <span className="text-xs text-gray-600">{t.notifications.tomsk}</span>
             </div>
           </section>
           <section className="rounded-lg bg-white p-4 shadow">
-            <h2 className="mb-3 text-lg font-semibold">Создание следующего месяца ГВС</h2>
-            <p className="mb-3 text-xs text-gray-600">Выбери пользователей сайта, которым разрешено создавать следующий месяц.</p>
+            <h2 className="mb-3 text-lg font-semibold">{t.notifications.billingCreatorsTitle}</h2>
+            <p className="mb-3 text-xs text-gray-600">{t.notifications.billingCreatorsHint}</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {users.map((u) => {
                 const normalized = u.login.toLowerCase()
@@ -257,7 +257,7 @@ export default function AdminUsers() {
             </div>
           </section>
           <section className="rounded-lg bg-white p-4 shadow">
-            <h2 className="mb-3 text-lg font-semibold">Ежедневный бэкап БД</h2>
+            <h2 className="mb-3 text-lg font-semibold">{t.notifications.dailyBackupTitle}</h2>
             <div className="grid gap-3 md:grid-cols-3">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -265,10 +265,10 @@ export default function AdminUsers() {
                   checked={dbBackupEnabled}
                   onChange={(e) => dbBackupMutation.mutate({ enabled: e.target.checked, email: dbBackupEmail, time: dbBackupTime, notify_user_id: dbBackupNotifyUserId })}
                 />
-                <span>Слать бэкап</span>
+                <span>{t.notifications.sendBackup}</span>
               </label>
               <label className="text-sm">
-                <div className="mb-1 text-gray-600">Время (Томск)</div>
+                <div className="mb-1 text-gray-600">{t.notifications.backupTime}</div>
                 <input
                   type="time"
                   defaultValue={dbBackupTime}
@@ -280,7 +280,7 @@ export default function AdminUsers() {
                 />
               </label>
               <label className="text-sm">
-                <div className="mb-1 text-gray-600">Email для бэкапа</div>
+                <div className="mb-1 text-gray-600">{t.notifications.backupEmail}</div>
                 <input
                   type="email"
                   defaultValue={dbBackupEmail}
@@ -293,7 +293,7 @@ export default function AdminUsers() {
                 />
               </label>
               <label className="text-sm">
-                <div className="mb-1 text-gray-600">Получатель уведомления в MAX</div>
+                <div className="mb-1 text-gray-600">{t.notifications.backupNotifyUser}</div>
                 <select
                   className="w-full rounded border px-3 py-2 text-sm"
                   value={dbBackupNotifyDraft}
@@ -303,7 +303,7 @@ export default function AdminUsers() {
                     dbBackupMutation.mutate({ enabled: dbBackupEnabled, email: dbBackupEmail, time: dbBackupTime, notify_user_id: next })
                   }}
                 >
-                  <option value="">Не выбран</option>
+                  <option value="">{t.notifications.notSelected}</option>
                   {maxUsers.filter((m) => m.has_chat).map((m) => (
                     <option key={`backup-notify-${m.user_id}`} value={m.user_id}>{m.name || m.user_id}</option>
                   ))}
@@ -382,15 +382,15 @@ export default function AdminUsers() {
       {activeTab === 'audit' && (
         <>
           <section className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="flex items-center justify-between gap-3 border-b px-4 py-3"><h2 className="text-lg font-semibold">Аудит ГВС биллинг</h2><a href={adminApi.billingAuditExportUrl()} className="rounded border bg-white px-3 py-1.5 text-sm">{t.audit.export}</a></div>
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3"><h2 className="text-lg font-semibold">{t.audit.billingTitle}</h2><a href={adminApi.billingAuditExportUrl()} className="rounded border bg-white px-3 py-1.5 text-sm">{t.audit.export}</a></div>
             <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-gray-100 text-left"><tr><th className="px-3 py-2">{t.audit.date}</th><th className="px-3 py-2">{t.audit.user}</th><th className="px-3 py-2">{t.audit.action}</th><th className="px-3 py-2">{t.audit.entity}</th><th className="px-3 py-2">{t.audit.field}</th><th className="px-3 py-2">{t.audit.old}</th><th className="px-3 py-2">{t.audit.now}</th></tr></thead><tbody>{(billingAuditQuery.data?.logs ?? []).map((l) => <tr key={l.id} className="border-t"><td className="px-3 py-2">{formatTime(l.created_at)}</td><td className="px-3 py-2">{l.actor_name || l.actor_login || '-'}</td><td className="px-3 py-2">{actionLabel(l.action)}</td><td className="px-3 py-2">{l.entity_label || l.entity_id || '-'}</td><td className="px-3 py-2">{l.field || '-'}</td><td className="px-3 py-2"><AuditText value={l.old_value} /></td><td className="px-3 py-2"><AuditText value={l.new_value} /></td></tr>)}</tbody></table></div>
           </section>
           <section className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="flex items-center justify-between gap-3 border-b px-4 py-3"><h2 className="text-lg font-semibold">Аудит приборов учета</h2><a href={adminApi.meteringAuditExportUrl()} className="rounded border bg-white px-3 py-1.5 text-sm">{t.audit.export}</a></div>
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3"><h2 className="text-lg font-semibold">{t.audit.meteringTitle}</h2><a href={adminApi.meteringAuditExportUrl()} className="rounded border bg-white px-3 py-1.5 text-sm">{t.audit.export}</a></div>
             <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-gray-100 text-left"><tr><th className="px-3 py-2">{t.audit.date}</th><th className="px-3 py-2">{t.audit.user}</th><th className="px-3 py-2">{t.audit.action}</th><th className="px-3 py-2">{t.audit.entity}</th><th className="px-3 py-2">{t.audit.field}</th><th className="px-3 py-2">{t.audit.old}</th><th className="px-3 py-2">{t.audit.now}</th></tr></thead><tbody>{(meteringAuditQuery.data?.logs ?? []).map((l) => <tr key={l.id} className="border-t"><td className="px-3 py-2">{formatTime(l.created_at)}</td><td className="px-3 py-2">{l.actor_name || l.actor_login || '-'}</td><td className="px-3 py-2">{actionLabel(l.action)}</td><td className="px-3 py-2">{l.entity_label || l.entity_id || '-'}</td><td className="px-3 py-2">{l.field || '-'}</td><td className="px-3 py-2"><AuditText value={l.old_value} /></td><td className="px-3 py-2"><AuditText value={l.new_value} /></td></tr>)}</tbody></table></div>
           </section>
           <section className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="flex items-center justify-between gap-3 border-b px-4 py-3"><h2 className="text-lg font-semibold">Аудит воды на лето ГСПО</h2><a href={adminApi.summerWaterAuditExportUrl()} className="rounded border bg-white px-3 py-1.5 text-sm">{t.audit.export}</a></div>
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3"><h2 className="text-lg font-semibold">{t.audit.summerWaterTitle}</h2><a href={adminApi.summerWaterAuditExportUrl()} className="rounded border bg-white px-3 py-1.5 text-sm">{t.audit.export}</a></div>
             <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-gray-100 text-left"><tr><th className="px-3 py-2">{t.audit.date}</th><th className="px-3 py-2">{t.audit.user}</th><th className="px-3 py-2">{t.audit.action}</th><th className="px-3 py-2">{t.audit.entity}</th><th className="px-3 py-2">{t.audit.field}</th><th className="px-3 py-2">{t.audit.old}</th><th className="px-3 py-2">{t.audit.now}</th></tr></thead><tbody>{(summerWaterAuditQuery.data?.logs ?? []).map((l) => <tr key={l.id} className="border-t"><td className="px-3 py-2">{formatTime(l.created_at)}</td><td className="px-3 py-2">{l.actor_name || l.actor_login || '-'}</td><td className="px-3 py-2">{actionLabel(l.action)}</td><td className="px-3 py-2">{l.entity_label || l.entity_id || '-'}</td><td className="px-3 py-2">{l.field || '-'}</td><td className="px-3 py-2"><AuditText value={l.old_value} /></td><td className="px-3 py-2"><AuditText value={l.new_value} /></td></tr>)}</tbody></table></div>
           </section>
           <section className="overflow-hidden rounded-lg bg-white shadow">
@@ -406,3 +406,4 @@ export default function AdminUsers() {
     </div>
   )
 }
+
