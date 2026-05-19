@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import ArshinMeterCheckModal, { type ArshinMeterDevice } from '../../components/ArshinMeterCheckModal'
@@ -6,96 +6,9 @@ import { ARSHIN_METER_DEVICES, hasFailedArshinCheck } from '../../components/ars
 import { arshinApi, type ArshinItem } from '../../api/arshin'
 import { meteringApi, type MeteringRecord } from '../../api/metering'
 import { getPreferredMitNotation } from '../../utils/arshinTypePrefs'
+import { meteringRu as t } from '../../locales/ru/metering'
 
-const GROUPS: Array<[string, Array<[keyof MeteringRecord, string]>]> = [
-  ['Объект', [
-    ['list_number', 'Номер по списку'],
-    ['contract_number', 'Номер договора'],
-    ['name', 'Наименование'],
-    ['address', 'Адрес объекта'],
-    ['identifier', 'Идентификатор'],
-    ['input_kind', 'Первичный/повторный'],
-  ]],
-  ['Акты и допуск', [
-    ['date_input_uute', 'Дата ввода УУТЭ'],
-    ['commercial_accounting', 'Введен в коммерческий учет'],
-    ['admit_until', 'Допуск до'],
-    ['date_output_uute', 'Дата вывода УУТЭ'],
-    ['output_reason', 'Причина вывода'],
-    ['act_primary_number', 'Номер акта ввода'],
-    ['act_periodic_number', 'Номер акта проверки'],
-    ['registration_date', 'Дата регистрации'],
-    ['violations', 'Нарушения'],
-    ['verifier', 'Поверитель'],
-    ['documents', 'Документы'],
-  ]],
-  ['Нагрузки и схема', [
-    ['heat_load', 'Нагрузка отопление'],
-    ['hot_water_load', 'Нагрузка ГВС'],
-    ['ventilation_load', 'Нагрузка вентиляция'],
-    ['contract_flow', 'Договорной расход'],
-    ['distance', 'Расстояние'],
-    ['diameter', 'Диаметр'],
-    ['connection_point_number', 'Номер точки присоединения'],
-    ['installation_point', 'Точка установки УУТЭ'],
-    ['system_type', 'Тип системы'],
-    ['service_org', 'Обслуживающая организация'],
-  ]],
-  ['Приборы', [
-    ['calculator_type', 'Тепловычислитель'],
-    ['calculator_serial', 'Тепловычислитель №'],
-    ['calculator_verification_date', 'Дата окончания поверки тепловычислителя'],
-    ['flowmeter_1', 'Расходомер 1'],
-    ['flowmeter_serial_1', 'Расходомер 1 №'],
-    ['flowmeter_verification_date_1', 'Дата окончания поверки расходомера 1'],
-    ['flowmeter_2', 'Расходомер 2'],
-    ['flowmeter_serial_2', 'Расходомер 2 №'],
-    ['flowmeter_verification_date_2', 'Дата окончания поверки расходомера 2'],
-    ['temp_sensor_1', 'Датчик температуры 1'],
-    ['temp_sensor_serial_1', 'Датчик температуры 1 №'],
-    ['temp_sensor_verification_date_1', 'Дата окончания поверки датчика температуры 1'],
-    ['temp_sensor_2', 'Датчик температуры 2'],
-    ['temp_sensor_serial_2', 'Датчик температуры 2 №'],
-    ['temp_sensor_verification_date_2', 'Дата окончания поверки датчика температуры 2'],
-    ['pressure_sensor_1', 'Датчик давления 1'],
-    ['pressure_sensor_serial_1', 'Датчик давления 1 №'],
-    ['pressure_sensor_verification_date_1', 'Дата окончания поверки датчика давления 1'],
-    ['pressure_sensor_2', 'Датчик давления 2'],
-    ['pressure_sensor_serial_2', 'Датчик давления 2 №'],
-    ['pressure_sensor_verification_date_2', 'Дата окончания поверки датчика давления 2'],
-    ['nearest_verification_date', 'Ближайшая поверка'],
-  ]],
-  ['Пломбы', [
-    ['seal_calculator', 'Пломба тепловычислитель №'],
-    ['seal_flowmeter_1', 'Пломба расходомер 1 №'],
-    ['seal_flowmeter_2', 'Пломба расходомер 2 №'],
-    ['seal_temp_sensor_1', 'Пломба датчик температуры 1 №'],
-    ['seal_temp_sensor_2', 'Пломба датчик температуры 2 №'],
-    ['seal_cut_1', 'Пломба врезка №1'],
-    ['seal_cut_2', 'Пломба врезка №2'],
-    ['seal_cut_3', 'Пломба врезка №3'],
-    ['seal_cut_4', 'Пломба врезка №4'],
-    ['seals_checked', 'Пломбы сверены'],
-  ]],
-  ['Показания', [
-    ['readings_date', 'Дата показаний'],
-    ['reading_q', 'Q'],
-    ['reading_m1', 'M1'],
-    ['reading_v1', 'V1'],
-    ['reading_m2', 'M2'],
-    ['reading_v2', 'V2'],
-    ['reading_t1', 't1'],
-    ['reading_t2', 't2'],
-    ['reading_p1', 'P1'],
-    ['reading_p2', 'P2'],
-    ['accepted_by', 'Принимал'],
-  ]],
-  ['Последняя проверка', [
-    ['check_date', 'Дата проверки'],
-    ['check_violations', 'Нарушения'],
-    ['check_note', 'Примечание'],
-  ]],
-]
+const GROUPS: Array<[string, Array<[keyof MeteringRecord, string]>]> = t.detail.groups
 
 export default function MeteringDetail() {
   const { id } = useParams<{ id: string }>()
@@ -204,7 +117,7 @@ export default function MeteringDetail() {
             label: device.label,
             serial,
             count: 0,
-            error: (e as Error).message || 'Ошибка поиска',
+            error: (e as Error).message || t.detail.searchError,
           })
         }
       }
@@ -222,7 +135,7 @@ export default function MeteringDetail() {
         await meteringApi.applyArshin(Number(id), {
           serial_key: row.serialKey,
           item: row.firstItem as Record<string, unknown>,
-          save_pdf: true,
+          
         })
         applied += 1
       }
@@ -234,7 +147,7 @@ export default function MeteringDetail() {
       setBulkResults((current) => current.map((row) => (
         row.count === 1 && row.firstItem ? { ...row, applied: true } : row
       )))
-      setBulkMessage('Сохранены все приборы, где найдено ровно 1 совпадение.')
+      setBulkMessage(t.detail.appliedAll)
     },
   })
 
@@ -244,7 +157,7 @@ export default function MeteringDetail() {
       await meteringApi.applyArshin(Number(id), {
         serial_key: row.serialKey,
         item: row.firstItem as Record<string, unknown>,
-        save_pdf: true,
+        
       })
     },
     onSuccess: async (_data, variables) => {
@@ -253,7 +166,7 @@ export default function MeteringDetail() {
       setBulkResults((current) => current.map((row) => (
         row.serialKey === variables.serialKey ? { ...row, applied: true } : row
       )))
-      setBulkMessage('Прибор сохранен в карточку и отправлен на Я.Диск.')
+      setBulkMessage(t.detail.appliedOne)
     },
   })
 
@@ -266,8 +179,8 @@ export default function MeteringDetail() {
     setForm(next)
   }, [data])
 
-  if (isLoading) return <div className="text-gray-500">Загрузка...</div>
-  if (error || !data) return <div className="text-red-700">Запись не найдена</div>
+  if (isLoading) return <div className="text-gray-500">{t.detail.loading}</div>
+  if (error || !data) return <div className="text-red-700">{t.detail.notFoundRecord}</div>
 
   const editableFields = GROUPS.flatMap(([, fields]) => fields)
 
@@ -290,14 +203,14 @@ export default function MeteringDetail() {
     <div className="space-y-4">
       <nav className="flex items-center justify-between text-sm">
         <Link to="/metering/gspo" className="text-blue-600 hover:underline">
-          ← ГСПО
+          {t.detail.backList}
         </Link>
         <button
           type="button"
           onClick={() => navigate(-1)}
           className="rounded border bg-white px-3 py-1.5 text-gray-700 hover:bg-gray-100"
         >
-          ← Назад
+          {t.detail.back}
         </button>
       </nav>
 
@@ -305,31 +218,31 @@ export default function MeteringDetail() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs uppercase text-gray-500">ГСПО</p>
-            <h1 className="text-xl font-bold">{data.name || 'Без названия'}</h1>
+            <h1 className="text-xl font-bold">{data.name || t.detail.noName}</h1>
             <p className="mt-1 text-sm text-gray-600">{data.address}</p>
             {hasFailedArshinCheck(data) && (
-              <p className="mt-2 text-sm font-medium text-red-700">Есть приборы с пригодностью «Нет» по АРШИН</p>
+              <p className="mt-2 text-sm font-medium text-red-700">{t.detail.arshinWarn}</p>
             )}
           </div>
         </div>
       </div>
 
       <section className="rounded-lg bg-white p-5 shadow">
-        <h2 className="mb-3 font-semibold">Контакты</h2>
-        {linksQuery.isLoading && <p className="text-sm text-gray-500">Загрузка связей...</p>}
+        <h2 className="mb-3 font-semibold">{t.detail.contacts}</h2>
+        {linksQuery.isLoading && <p className="text-sm text-gray-500">{t.detail.linksLoading}</p>}
         {linksQuery.data?.links.length === 0 && (
-          <p className="text-sm text-gray-500">Связанных контактов пока нет.</p>
+          <p className="text-sm text-gray-500">{t.detail.noLinks}</p>
         )}
         <div className="space-y-2">
           {linksQuery.data?.links.map(({ link, contact }) => (
             <div key={link.id} className="flex flex-col gap-2 rounded border bg-gray-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <Link to={`/contacts/${contact.id}`} className="font-medium text-blue-700 hover:underline">
-                  {contact.name || contact.consumer || 'Контакт'}
+                  {contact.name || contact.consumer || t.detail.contacts}
                 </Link>
-                <p className="text-gray-600">{contact.address || '—'}</p>
+                <p className="text-gray-600">{contact.address || '-'}</p>
                 <p className="text-xs text-gray-500">
-                  {link.status} · {link.match_score ?? '—'} · {link.match_reason || 'ручная связь'}
+                  {link.status} · {link.match_score ?? '—'} · {link.match_reason || t.detail.manualLink}
                 </p>
               </div>
               <button
@@ -337,7 +250,7 @@ export default function MeteringDetail() {
                 onClick={() => deleteLinkMutation.mutate(contact.id)}
                 className="w-fit rounded border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50"
               >
-                Убрать связь
+                {t.detail.unlink}
               </button>
             </div>
           ))}
@@ -350,10 +263,10 @@ export default function MeteringDetail() {
               onChange={(event) => setSelectedContactId(event.target.value)}
               className="min-w-0 flex-1 rounded border bg-white px-3 py-2 text-sm"
             >
-              <option value="">Выбрать контакт для связи...</option>
+              <option value="">{t.detail.selectContact}</option>
               {linksQuery.data.candidates.map((candidate) => candidate.contact && (
                 <option key={candidate.contact.id} value={candidate.contact.id}>
-                  {candidate.score} · {candidate.contact.name || candidate.contact.consumer} · {candidate.contact.address}
+                  {candidate.score} В· {candidate.contact.name || candidate.contact.consumer} В· {candidate.contact.address}
                 </option>
               ))}
             </select>
@@ -363,7 +276,7 @@ export default function MeteringDetail() {
               onClick={() => createLinkMutation.mutate(Number(selectedContactId))}
               className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              Связать
+              {t.detail.link}
             </button>
           </div>
         )}
@@ -386,7 +299,7 @@ export default function MeteringDetail() {
                     disabled={updateMutation.isPending}
                     className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+                    {updateMutation.isPending ? t.detail.saving : t.detail.save}
                   </button>
                   <button
                     type="button"
@@ -396,7 +309,7 @@ export default function MeteringDetail() {
                     }}
                     className="rounded border bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-100"
                   >
-                    Отмена
+                    {t.detail.cancel}
                   </button>
                 </>
               ) : (
@@ -405,7 +318,7 @@ export default function MeteringDetail() {
                   onClick={() => setEditingGroup(title)}
                   className="rounded border bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-100"
                 >
-                  Редактировать
+                  {t.detail.edit}
                 </button>
               )}
               {isDevicesSection && !isGroupEditing && (
@@ -416,7 +329,7 @@ export default function MeteringDetail() {
                     disabled={bulkCheckMutation.isPending || bulkApplyMutation.isPending}
                     className="rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-800 hover:bg-blue-100 disabled:opacity-50"
                   >
-                    {bulkCheckMutation.isPending ? 'Проверяю…' : 'Проверить все'}
+                    {bulkCheckMutation.isPending ? t.detail.checking : t.detail.checkAll}
                   </button>
                   <button
                     type="button"
@@ -424,7 +337,7 @@ export default function MeteringDetail() {
                     disabled={bulkApplyMutation.isPending || bulkResults.filter((r) => r.count === 1 && r.firstItem).length === 0}
                     className="rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
                   >
-                    {bulkApplyMutation.isPending ? 'Сохраняю…' : 'Подтвердить и сохранить'}
+                    {bulkApplyMutation.isPending ? t.detail.saving : t.detail.confirmSave}
                   </button>
                 </>
               )}
@@ -433,7 +346,7 @@ export default function MeteringDetail() {
                   href={meteringApi.admissionActUrl(Number(id))}
                   className="rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-800 hover:bg-blue-100"
                 >
-                  Скачать акт
+                  {t.detail.downloadAct}
                 </a>
               )}
             </div>
@@ -453,12 +366,12 @@ export default function MeteringDetail() {
                       <span>
                         {row.label} ({row.serial}):{' '}
                         {row.error
-                          ? `ошибка (${row.error})`
+                          ? `error (${row.error})`
                           : row.count === 0
-                            ? 'не найдено'
+                            ? t.detail.notFound
                             : row.count === 1
-                              ? 'найдена 1 запись'
-                              : `найдено ${row.count} записей`}
+                              ? t.detail.foundOne
+                              : t.detail.foundMany(row.count)}
                       </span>
                       <div className="flex items-center gap-2">
                         {row.count === 1 && row.firstItem && (
@@ -468,7 +381,7 @@ export default function MeteringDetail() {
                             disabled={applyOneMutation.isPending || row.applied}
                             className="rounded border border-emerald-200 bg-white px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                           >
-                            {row.applied ? 'Сохранено' : 'Подтвердить и сохранить'}
+                            {row.applied ? t.detail.saved : t.detail.confirmSave}
                           </button>
                         )}
                         {row.count > 0 && device && (
@@ -485,7 +398,7 @@ export default function MeteringDetail() {
                             }}
                             className="rounded border border-blue-200 bg-white px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-50"
                           >
-                            Выбрать вручную
+                            {t.detail.selectManual}
                           </button>
                         )}
                       </div>
@@ -514,7 +427,7 @@ export default function MeteringDetail() {
                     <div className="flex items-start justify-between gap-2">
                       {isGroupEditing ? (
                         key === 'nearest_verification_date' ? (
-                          <span className="whitespace-pre-line">{value ? String(value) : '—'}</span>
+                          <span className="whitespace-pre-line">{value ? String(value) : '-'}</span>
                         ) :
                         key === 'commercial_accounting' ? (
                           <select
@@ -522,9 +435,9 @@ export default function MeteringDetail() {
                             onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
                             className="min-w-[170px] rounded border px-2 py-1 text-sm"
                           >
-                            <option value="">—</option>
-                            <option value="да">Да</option>
-                            <option value="нет">Нет</option>
+                            <option value="">-</option>
+                            <option value="да">{t.detail.yes}</option>
+                            <option value="нет">{t.detail.no}</option>
                           </select>
                         ) : (
                           <input
@@ -534,7 +447,7 @@ export default function MeteringDetail() {
                           />
                         )
                       ) : (
-                        <span className="whitespace-pre-line">{value ? String(value) : '—'}</span>
+                        <span className="whitespace-pre-line">{value ? String(value) : '-'}</span>
                       )}
                       {arshinMeter && String(data[arshinMeter.serialKey] ?? '').trim() && (
                         <button
@@ -542,17 +455,17 @@ export default function MeteringDetail() {
                           onClick={() => setArshinDevice(arshinMeter)}
                           className="shrink-0 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800 hover:bg-blue-100"
                         >
-                          АРШИН
+                          {t.detail.arshin}
                         </button>
                       )}
                     </div>
                     {arshinCheck && (
                       <p className="text-xs text-gray-600">
-                        АРШИН: действительна до{' '}
-                        <span className="font-medium">{arshinCheck.valid_date || '—'}</span>
-                        {' · '}
+                        {t.detail.arshin}:{' '}
+                        <span className="font-medium">{arshinCheck.valid_date || '-'}</span>
+                        {' В· '}
                         <span className={arshinCheck.applicability ? 'text-emerald-800' : 'font-semibold text-red-800'}>
-                          пригодность: {arshinCheck.applicability ? 'Да' : 'Нет'}
+                          {t.detail.applicability}: {arshinCheck.applicability ? t.detail.yes : t.detail.no}
                         </span>
                       </p>
                     )}
@@ -563,7 +476,7 @@ export default function MeteringDetail() {
                         rel="noreferrer"
                         className="text-xs font-medium text-blue-700 hover:underline"
                       >
-                        Запись поверки в АРШИН
+                        {t.detail.arshinRecord}
                       </a>
                     )}
                   </dd>
@@ -573,7 +486,7 @@ export default function MeteringDetail() {
           </dl>
           {isGroupEditing && updateMutation.error && (
             <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              Не удалось сохранить изменения.
+              {t.detail.failedSave}
             </div>
           )}
           </form>
@@ -596,3 +509,4 @@ export default function MeteringDetail() {
     </div>
   )
 }
+

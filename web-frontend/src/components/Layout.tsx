@@ -8,7 +8,7 @@ const navItems = [
 ]
 
 const serviceItems = [
-  { to: '/arshin', label: 'ARSHIN' },
+  { to: '/arshin', label: 'АРШИН' },
   { to: '/metering', label: 'Приборы учета' },
   { to: '/summer-water', label: 'Вода на лето ГСПО', waterAllowed: true },
   { to: '/billing', label: 'ГВС биллинг', billingOnly: true },
