@@ -76,7 +76,7 @@ class ContactsWeb < Sinatra::Base
     end
 
     def parse_json_body
-      body = request.body.read.to_s
+      body = request.body.read.to_s.force_encoding('UTF-8')
       return {} if body.strip.empty?
 
       JSON.parse(body)
@@ -203,7 +203,7 @@ class ContactsWeb < Sinatra::Base
       valid_date = (data['valid_date'] || data[:valid_date]).to_s.strip
       org = (data['org_title'] || data[:org_title]).to_s.strip
       registry_url = (data['registry_url'] || data[:registry_url]).to_s.strip
-      yadisk_path = (data['yadisk_path'] || data[:yadisk_path]).to_s.strip
+      
 
       lines = []
       lines << "Номер: #{number}" unless number.empty?
@@ -212,7 +212,7 @@ class ContactsWeb < Sinatra::Base
       lines << "Действует до: #{valid_date}" unless valid_date.empty?
       lines << "Поверитель: #{org}" unless org.empty?
       lines << "АРШИН: #{registry_url}" unless registry_url.empty?
-      lines << "PDF: #{yadisk_path}" unless yadisk_path.empty?
+      
       lines.empty? ? 'Поверка по АРШИН сохранена' : lines.join("\n")
     end
 
@@ -221,7 +221,7 @@ class ContactsWeb < Sinatra::Base
       checks.is_a?(Hash) ? checks : {}
     end
 
-    def arshin_item_audit_data(item, registry_url:, yadisk_path:)
+    def arshin_item_audit_data(item, registry_url:)
       {
         'mi_number' => item['mi_number'],
         'mit_number' => item['mit_number'],
@@ -229,8 +229,7 @@ class ContactsWeb < Sinatra::Base
         'verification_date' => item['verification_date'],
         'valid_date' => item['valid_date'],
         'org_title' => item['org_title'],
-        'registry_url' => registry_url,
-        'yadisk_path' => yadisk_path
+        'registry_url' => registry_url
       }
     end
   end
@@ -1184,12 +1183,11 @@ class ContactsWeb < Sinatra::Base
     result = UuteService.apply_arshin_meter_check(
       id,
       serial_key: serial_key,
-      item: item,
-      save_pdf: body['save_pdf'] != false
+      item: item
     )
     after = UuteService.find(id)
     new_check = arshin_checks_from_record(after)[serial_key]
-    new_check = arshin_item_audit_data(item, registry_url: registry_url, yadisk_path: result[:yadisk_path]) if new_check.nil? || new_check.empty?
+    new_check = arshin_item_audit_data(item, registry_url: registry_url) if new_check.nil? || new_check.empty?
     audit!(
       action: 'metering_arshin_apply',
       entity_type: 'metering',
@@ -1200,10 +1198,6 @@ class ContactsWeb < Sinatra::Base
       new_value: arshin_audit_summary(new_check),
       details: {
         serial_key: serial_key,
-        save_pdf: body['save_pdf'] != false,
-        pdf_saved: result[:pdf_saved],
-        pdf_error: result[:pdf_error],
-        yadisk_path: result[:yadisk_path],
         mi_number: item['mi_number'],
         mit_number: item['mit_number'],
         mit_notation: item['mit_notation'],
@@ -1803,3 +1797,4 @@ class ContactsWeb < Sinatra::Base
 
   run! if app_file == $PROGRAM_NAME
 end
+
