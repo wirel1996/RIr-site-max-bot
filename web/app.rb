@@ -1109,6 +1109,45 @@ class ContactsWeb < Sinatra::Base
     json_response(UuteService.list_gspo(page: page, query: query))
   end
 
+  get '/api/metering/gspo/export' do
+    require_not_water_payment_only!
+    require 'spreadsheet'
+    require 'tempfile'
+    require 'date'
+
+    records = UuteService.export_all
+    halt 404, json_error('Нет объектов для выгрузки', 404) if records.empty?
+
+    Spreadsheet.client_encoding = 'UTF-8'
+    book = Spreadsheet::Workbook.new
+    sheet = book.create_worksheet(name: 'Приборы учета ГСПО')
+
+    columns = UuteService::EXPORT_COLUMNS
+    columns.each_with_index { |(_, label), i| sheet[0, i] = label }
+    sheet.row(0).default_format = Spreadsheet::Format.new(weight: :bold)
+
+    records.each_with_index do |record, idx|
+      columns.each_with_index do |(key, _), col_idx|
+        val = record[key]
+        sheet[idx + 1, col_idx] = (val.nil? || val.to_s.strip.empty?) ? '' : val.to_s.strip
+      end
+    end
+
+    date = Date.today.strftime('%Y%m%d')
+    filename = "Приборы_учета_ГСПО_#{date}.xls"
+    tmpfile = Tempfile.new(['gspo_export', '.xls'])
+    tmpfile.close
+    book.write(tmpfile.path)
+
+    audit!(
+      action: 'metering_export',
+      entity_type: 'metering',
+      entity_label: "Выгрузка ГСПО (#{records.size} объектов)"
+    )
+
+    send_file tmpfile.path, filename: filename, type: 'application/vnd.ms-excel', disposition: 'attachment'
+  end
+
   get '/api/metering/gspo/:id' do |id|
     record = UuteService.find(id)
     halt 404, json_error('not found', 404) unless record

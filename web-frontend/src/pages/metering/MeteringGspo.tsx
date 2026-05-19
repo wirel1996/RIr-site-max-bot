@@ -79,7 +79,7 @@ export default function MeteringGspo() {
           )}
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="search"
             value={query}
@@ -87,6 +87,12 @@ export default function MeteringGspo() {
             placeholder="Поиск по названию, адресу, договору, прибору..."
             className="w-full rounded border bg-white px-3 py-2 text-sm sm:w-96"
           />
+          <a
+            href={meteringApi.gspoExportUrl()}
+            className="inline-flex items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Выгрузить объекты
+          </a>
           {(user?.role === 'admin' || user?.role === 'full') && (
             <label className="inline-flex cursor-pointer items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
               {importMutation.isPending ? 'Загрузка...' : 'Загрузить Excel'}

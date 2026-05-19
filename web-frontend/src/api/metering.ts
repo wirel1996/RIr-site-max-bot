@@ -236,6 +236,7 @@ export const meteringApi = {
     if (query.trim()) params.set('q', query.trim())
     return api.get<MeteringListResponse>(`/metering/gspo?${params.toString()}`)
   },
+  gspoExportUrl: () => '/api/metering/gspo/export',
   detail: (id: number) => api.get<MeteringRecord>(`/metering/gspo/${id}`),
   admissionActUrl: (id: number) => `/api/metering/gspo/${id}/admission-act`,
   update: (id: number, payload: Partial<MeteringRecord>) =>

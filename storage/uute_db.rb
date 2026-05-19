@@ -290,6 +290,10 @@ module UuteDB
     end
   end
 
+  def all_gspo(db)
+    db.execute("SELECT * FROM uute_objects WHERE category = 'gspo' ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '')")
+  end
+
   def find(db, id)
     db.get_first_row('SELECT * FROM uute_objects WHERE id = ?', [id.to_i])
   end
