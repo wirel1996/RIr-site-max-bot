@@ -136,7 +136,7 @@ export default function BillingObjectPage() {
                   autoFocus
                 />
               </label>
-              <div className="text-xs text-gray-500 pb-1">Date: {todayRu()}</div>
+              <div className="text-xs text-gray-500 pb-1">Дата: {todayRu()}</div>
               <button type="submit" className="rounded bg-green-600 text-white px-3 py-2 text-sm hover:bg-green-700" disabled={saveReading.isPending}>
                 {saveReading.isPending ? 'Сохранение...' : 'Сохранить'}
               </button>
