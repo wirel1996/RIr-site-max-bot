@@ -1126,19 +1126,19 @@ class ContactsWeb < Sinatra::Base
     columns.each_with_index { |(_, label), i| sheet[0, i] = label }
     sheet.row(0).default_format = Spreadsheet::Format.new(weight: :bold)
 
-    wrap_format = Spreadsheet::Format.new(text_wrap: true, width: 40)
-    thin_format = Spreadsheet::Format.new(width: 12)
+    wrap_format = Spreadsheet::Format.new(text_wrap: true)
 
     columns.each_with_index do |(key, _), col_idx|
       case key
       when 'name', 'address'
+        sheet.column(col_idx).width = 40
         sheet.column(col_idx).default_format = wrap_format
       when 'nearest_verification_date', 'admit_until', 'date_input_uute', 'date_output_uute',
            'calculator_verification_date', 'flowmeter_verification_date_1', 'flowmeter_verification_date_2',
            'temp_sensor_verification_date_1', 'temp_sensor_verification_date_2',
            'pressure_sensor_verification_date_1', 'pressure_sensor_verification_date_2',
            'registration_date', 'check_date', 'readings_date'
-        sheet.column(col_idx).default_format = thin_format
+        sheet.column(col_idx).width = 12
       end
     end
 
