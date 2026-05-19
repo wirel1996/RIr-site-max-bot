@@ -1,0 +1,65 @@
+export const journalRu = {
+  alerts: {
+    dayNotCreated: 'Этот день ещё не создан в журнале — сначала добавьте неделю.',
+    saveError: 'Не удалось сохранить ячейку',
+    noAudit: 'По этой ячейке пока нет записей аудита.',
+    unknownActor: 'Неизвестно',
+    lastChange: 'Последнее изменение',
+    saturdayConfirm: 'Сделать субботу рабочей?',
+    addColumnPrompt: 'Наименование нового столбца',
+    deleteColumnPromptPrefix: 'Удалить столбик (точное наименование):',
+  },
+  cell: {
+    dayNotInGoogle: 'День не создан в Google Sheets',
+    auditLoading: 'Загрузка аудита...',
+    noChanges: 'Изменений пока нет',
+    lastPrefix: 'Последний',
+    auditLoadError: 'Не удалось загрузить аудит',
+  },
+  header: {
+    title: 'Электронный журнал',
+    weekPrefix: 'Неделя',
+    loadingSuffix: '— загрузка…',
+    refreshTitle: 'Сейчас загрузить неделю из Google (иначе автообновление)',
+    refreshing: 'Обновляю…',
+    refresh: 'Обновить',
+    menu: 'Меню',
+    search: 'Поиск',
+    settings: 'Настройки',
+  },
+  toolbar: {
+    fillSelected: 'Заливка выбранной ячейки:',
+  },
+  states: {
+    loadingWeek: 'Загрузка недели',
+    journalStarting: 'Журнал запускается, подгружаю недели...',
+    weekLoadError: 'Не удалось загрузить неделю.',
+  },
+  table: {
+    dateTime: 'Дата · Время',
+  },
+  footer: {
+    creating: 'Создаю...',
+    nextWeek: '+ Следующая неделя',
+    todayMark: ' •',
+  },
+  settingsModal: {
+    title: 'Настройки недели',
+    close: 'Закрыть',
+    saturday: 'Суббота рабочая',
+    addColumn: 'Добавить столбик',
+    deleteColumn: 'Удалить столбик',
+    renameTitle: 'Изменить названия столбцов',
+    renamePlaceholder: 'Новое название (пусто = без изменений)',
+    saveRenames: 'Сохранить переименования',
+  },
+  searchModal: {
+    title: 'Поиск по журналу',
+    close: 'Закрыть',
+    inputPlaceholder: 'Введите текст задачи или ФИО...',
+    find: 'Найти',
+    searching: 'Ищу по журналу...',
+    empty: 'Ничего не найдено',
+  },
+} as const
+

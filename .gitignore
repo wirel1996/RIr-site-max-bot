@@ -1,3 +1,26 @@
+.env
+.env.*
+!.env.example
+
+# SQLite DB and data dir
+data/
+*.db
+
+# Logs and temp
+log/
+tmp/
+cache/
+*.log
+
+# Excel and other local files
+*.xls
+*.xlsx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
 # Environment
 .env
 
@@ -23,3 +46,15 @@ tmp/
 # IDE
 .vscode/
 .idea/
+
+# Auth secrets / users
+storage/users.json
+storage/session_secret
+
+# SQLite WAL/SHM temp files
+*.db-shm
+*.db-wal
+tmp_*.json
+tmp_*.csv
+tmp_*.xlsx
+tmp_*.tsv

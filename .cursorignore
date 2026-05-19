@@ -1,0 +1,13 @@
+.env
+.env.*
+data/
+*.db
+log/
+tmp/
+*.log
+*.xls
+*.xlsx
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,33 @@
+{
+	# Не слушаем 80 (там IIS / Взлёт-веб), без авто-редиректов.
+	auto_https off
+}
+
+северскокэ.рф:443, www.северскокэ.рф:443 {
+	encode zstd gzip
+
+	# Статический сертификат от reg.ru / GlobalSign (выдан до 2026-11-23).
+	tls C:/max_bot/caddy/cert/fullchain.pem C:/max_bot/caddy/cert/key.pem
+
+	# 1. Только /api/* проксируем в Sinatra. Basic Auth на этом уровне.
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:4567 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# 2. Всё остальное — статика React-приложения с SPA fallback на index.html.
+	handle {
+		root * C:/max_bot/web-frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file C:/max_bot/log/caddy_access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

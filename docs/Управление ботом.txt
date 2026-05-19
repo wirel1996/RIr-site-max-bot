@@ -1,0 +1,352 @@
+========================================
+  MAX БОТ — УПРАВЛЕНИЕ СЛУЖБОЙ
+========================================
+
+--- ПРОВЕРИТЬ СТАТУС ---
+Get-Service MaxBot
+
+--- ЗАПУСТИТЬ (если Stopped) ---
+Start-Service MaxBot
+
+--- ОСТАНОВИТЬ ---
+Stop-Service MaxBot
+
+--- ПЕРЕЗАПУСТИТЬ ---
+Restart-Service MaxBot
+
+--- ПРОВЕРИТЬ ЛОГИ ---
+Get-Content C:\max_bot\log\max.log -Tail 50
+Get-Content C:\max_bot\log\service_stderr.log -Tail 30
+
+--- СЛЕДИТЬ ЗА ЛОГОМ В РЕАЛЬНОМ ВРЕМЕНИ ---
+Get-Content C:\max_bot\log\max.log -Wait -Tail 20
+
+
+========================================
+  НАСТРОЙКИ (.env)
+========================================
+
+Файл настроек: C:\max_bot\.env
+
+Основные параметры:
+  MAX_BOT_TOKEN        — токен бота MAX
+  MAX_POLL_INTERVAL    — интервал опроса в секундах (по умолчанию 3)
+  ARSHIN_ENABLED       — включить поиск в АРШИН (1/0)
+  ARSHIN_MER_ORG_TITLE — название организации-поверителя по умолчанию
+  ARSHIN_ALLOWED_YEARS — годы поверки для выбора (через запятую)
+  ARSHIN_RESULT_LIMIT  — максимум результатов АРШИН (по умолчанию 5)
+
+
+========================================
+  ЧАСТЫЕ ПРОБЛЕМЫ
+========================================
+
+Бот не запускается:
+  1. Проверьте статус: Get-Service MaxBot
+  2. Проверьте лог ошибок: Get-Content C:\max_bot\log\service_stderr.log -Tail 30
+  3. Убедитесь что .env существует: Test-Path C:\max_bot\.env
+  4. Проверьте токен в .env
+
+АРШИН не находит приборы:
+  Включите отладку в .env: ARSHIN_DEBUG=1
+  Смотрите лог: Get-Content C:\max_bot\log\arshin.log -Tail 50
+  Проверьте доступ к API вручную в браузере:
+  https://fgis.gost.ru/fundmetrology/eapi/vri?rows=5
+
+Бот завис (не отвечает):
+  Restart-Service MaxBot
+
+
+========================================
+  PDF-КАРТОЧКА ПОВЕРКИ (АРШИН → Я.Диск)
+========================================
+
+После поиска прибора в АРШИН бот может сгенерировать PDF-карточку
+со всеми полями (номер, тип, поверитель, даты, документ, пригодность)
+и положить её в выбранную папку на Я.Диске. Кнопки:
+  "📄 Положить PDF в папку на Я.Диск" — в карточке биллинга и в форме
+   АРШИН (если найден ровно один прибор)
+  "📥 Положить PDF сюда" — в папке на Я.Диске, когда PDF уже готов
+
+Нужен:
+  1. Гем prawn — ставится через bundle install (уже в Gemfile)
+  2. TTF-шрифт с поддержкой кириллицы
+
+Windows (текущий сервер):
+  Используется C:\Windows\Fonts\arial.ttf автоматически — ничего
+  делать не надо.
+
+Linux (облачный сервер — при переносе):
+  sudo apt install fonts-dejavu
+  Путь /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf подхватится
+  автоматически. Альтернатива: fonts-liberation.
+
+Если шрифт не найден и Prawn не загрузился — бот вместо .pdf положит
+.txt с теми же полями (аварийный фолбек, всё продолжит работать).
+
+Ручной путь к шрифту в .env (если хочется своё):
+  PDF_FONT_PATH=/path/to/font.ttf
+  PDF_FONT_BOLD_PATH=/path/to/font-bold.ttf
+
+Временные файлы: C:\max_bot\storage\arshin_pdfs — чистятся автоматом
+(TTL PENDING_SNAPSHOTS_TTL, по умолчанию 1 час).
+
+
+========================================
+  КОНТАКТЫ ПОТРЕБИТЕЛЕЙ (Google Sheets → SQLite)
+========================================
+
+В разделе "Алгоритмы и информация" появился пункт "📞 Контакты потребителей".
+Источник правды — Google Sheets файл с ID из CONTACTS_DOCUMENT_ID в .env.
+Локально данные хранятся в SQLite (CONTACTS_DB_PATH, по умолчанию
+C:\max_bot\storage\contacts.db).
+
+Категории и поля:
+  УК и ТСЖ              — Наименование, Адрес, Руководитель, Телефон
+  ГСПО                  — Точка присоединения, Наименование, Адрес,
+                          Потребитель, Телефон + Альтернативный
+  Прочие ФЛ             — Потребитель, Адрес, Телефон, Доп. телефон
+                          (вытянутый из Примечания), Примечание
+  Прочие ЮЛ             — Наименование, Место нахождения, Телефон
+  Иглаково (коттеджи)   — Объект, Владелец, Телефон для уведомлений,
+                          Телефон общий (чеки)
+
+Обновление контактов:
+  - Автоматически по cron (CONTACTS_SYNC_CRON, по умолчанию каждый рабочий
+    день в 08:15).
+  - Вручную: пункт "🔄 Обновить из Google Sheets" в меню Контакты.
+    Доступен только админам — список = BILLING_MONTH_CREATOR_IDS
+    (если задан) либо BILLING_ALLOWED_USER_IDS.
+  - Первая синхронизация выполняется автоматически при старте бота, если
+    БД пустая.
+
+Логи синхронизации в C:\max_bot\log\max.log, ищите ContactsSyncService.
+
+Если структура листа в Google Sheets поменялась (переставили колонки) —
+парсер всё равно подхватит по нормализованным заголовкам ("телефон",
+"наимен", "адрес", "руковод", "потребит", "владел", "точка присоедин").
+Перетаскивать колонки в исходнике безопасно. Если переименовали лист
+(Названия вкладок) — нужно поправить TAB_MAPPING в
+services/contacts_sync_service.rb.
+
+Удалить локальную БД (например, чтобы пересобрать с нуля):
+  Stop-Service MaxBot
+  Remove-Item C:\max_bot\storage\contacts.db
+  Start-Service MaxBot
+  (бот сам пересоздаст и заполнит при старте)
+
+
+========================================
+  ВЕБ-ИНТЕРФЕЙС КОНТАКТОВ (Sinatra)
+========================================
+
+Простая веб-страничка для просмотра контактов потребителей.
+Читает ту же SQLite-базу что и бот, только просмотр.
+
+Запуск (вручную):
+  cd C:\max_bot
+  bundle exec ruby web/app.rb
+
+По умолчанию слушает на 0.0.0.0:4567 (доступен из локальной сети).
+Защита basic auth — логин любой, пароль из CONTACTS_WEB_PASSWORD в .env.
+
+Параметры в .env:
+  CONTACTS_WEB_BIND=0.0.0.0       — 127.0.0.1 если только локально
+  CONTACTS_WEB_PORT=4567
+  CONTACTS_WEB_PASSWORD=...        — пароль basic auth
+
+Установка как Windows-службы (через nssm):
+  C:\nssm\nssm-2.24\win64\nssm.exe install MaxBotWeb "C:\Ruby40-x64\bin\ruby.exe" "web\app.rb"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBotWeb AppDirectory "C:\max_bot"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBotWeb AppExit Default Restart
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBotWeb AppRestartDelay 5000
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBotWeb AppStdout "C:\max_bot\log\web_stdout.log"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBotWeb AppStderr "C:\max_bot\log\web_stderr.log"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBotWeb Start SERVICE_AUTO_START
+  C:\nssm\nssm-2.24\win64\nssm.exe start MaxBotWeb
+
+Открыть в браузере:
+  http://localhost:4567 (локально)
+  http://<IP-сервера>:4567 (из локалки)
+  При первом заходе спросит логин/пароль — логин любой, пароль из .env.
+
+ВНИМАНИЕ: контакты содержат персональные данные (ФИО + телефоны).
+Не публиковать наружу без HTTPS и нормальной авторизации.
+Если потребуется доступ из интернета — поднять reverse proxy (Caddy/nginx)
+с TLS и заменить basic auth на что-то получше.
+
+
+========================================
+  HTTPS ДЛЯ САЙТА (Caddy + reg.ru SSL)
+========================================
+
+Сайт https://северскокэ.рф/ обслуживается:
+  - Caddy (служба CaddyContacts) на 0.0.0.0:443 — TLS-терминирование,
+    реверс-прокси на 127.0.0.1:4567.
+  - Sinatra (служба MaxBotWeb) — собственно приложение.
+  - IIS на :80 хостит Взлёт-веб (/sp/), наружу 80 не пробрасывать
+    либо смириться с тем, что http://северскокэ.рф/ покажет IIS-страничку.
+
+Сертификат:
+  - Issuer: GlobalSign DV (через reg.ru, бесплатный с доменом).
+  - Файлы: C:\max_bot\caddy\cert\
+      cert.pem      — лиф-сертификат
+      chain.pem     — intermediate + root
+      fullchain.pem — leaf + intermediate + root (используется в Caddy)
+      key.pem       — приватный ключ (chmod 0600!)
+  - Срок: 6 месяцев. Дата окончания текущего — в начале файла
+    cert.pem (поле `notAfter`) или через:
+      openssl x509 -in C:\max_bot\caddy\cert\cert.pem -noout -dates
+
+Перевыпуск сертификата (когда срок подойдёт):
+  1. В личном кабинете reg.ru → SSL-сертификаты → Перевыпуск.
+  2. Скачать новые файлы (cert + private key + chain).
+  3. Положить новые `cert.pem`, `chain.pem`, `key.pem` в
+     C:\max_bot\caddy\cert\, заменив старые.
+  4. Пересобрать fullchain:
+       cd C:\max_bot\caddy\cert
+       cmd /c "type cert.pem chain.pem > fullchain.pem"
+  5. Restart-Service CaddyContacts
+  6. Проверить: openssl s_client -connect северскокэ.рф:443 -servername северскокэ.рф
+     должен выдать notAfter с новой датой.
+
+Если reg.ru не даёт скачать private.key (бывает с бесплатными DV) — есть
+запасной путь: сгенерировать свою пару (key + CSR) на сервере и
+запросить перевыпуск под СВОЙ CSR (тогда ключ остаётся у нас навсегда).
+Команды для генерации — лежат в `caddy/cert/key.pem` уже есть готовый,
+если нужно сгенерить с нуля — спроси Claude или используй openssl:
+  openssl genrsa -out new.key 4096
+  openssl req -new -key new.key -out new.csr -subj "/C=RU/CN=северскокэ.рф" \
+              -addext "subjectAltName=DNS:северскокэ.рф,DNS:www.северскокэ.рф"
+
+Веб-интерфейс контактов доступен извне:
+  https://северскокэ.рф/   (basic auth, пароль в .env CONTACTS_WEB_PASSWORD)
+
+
+========================================
+  ВЕБ-ИНТЕРФЕЙС (React + Sinatra JSON API)
+========================================
+
+Архитектура:
+  Caddy (TLS, :443)
+    ├── /api/* → Sinatra на 127.0.0.1:4567 (служба MaxBotWeb)
+    └── /*    → React SPA (статика из C:\max_bot\web-frontend\dist\)
+
+Frontend стек: Vite 7 + React 19 + TypeScript + Tailwind v4
+               + React Router v7 + TanStack Query v5
+Backend:        Sinatra (Ruby) — только JSON, никаких ERB.
+
+Структура проекта:
+  C:\max_bot\
+  ├── web\               — Sinatra JSON API (Ruby)
+  │   ├── app.rb         — все роуты /api/*
+  │   └── config.ru      — для rackup, если понадобится
+  ├── web-frontend\      — React SPA (TypeScript)
+  │   ├── src\           — исходники
+  │   │   ├── api\       — обёртки fetch к /api/*
+  │   │   ├── components\— общие компоненты (Layout)
+  │   │   └── pages\     — страницы по фичам
+  │   ├── dist\          — собранный bundle (его раздаёт Caddy)
+  │   └── package.json
+  └── caddy\Caddyfile    — реверс-прокси /api/* + раздача dist
+
+Как обновить фронтенд после правок:
+  cd C:\max_bot\web-frontend
+  .\build-and-deploy.ps1
+  (или вручную: npm run build; Restart-Service CaddyContacts)
+
+Dev-режим (если надо отлаживать с hot-reload):
+  cd C:\max_bot\web-frontend
+  npm run dev
+  Откроется на http://localhost:5173, проксирует /api/* в Sinatra.
+  Backend (Sinatra) при этом тоже должен быть запущен.
+
+Установка зависимостей с нуля (после git clone на новой машине):
+  Установить Node.js 22 LTS с nodejs.org.
+  cd C:\max_bot\web-frontend
+  npm install
+  npm run build
+
+Если упадёт на Vite 8 (rolldown native binding на Windows):
+  Vite 7 стабильнее, в package.json уже зафиксирован "^7".
+
+
+========================================
+  ФИЧИ САЙТА (https://северскокэ.рф/)
+========================================
+
+Все экраны бота воспроизведены на сайте (на React).
+
+  /                   Главное меню (плитки фич)
+  /journal            Электронный журнал — список месячных вкладок
+  /journal/<месяц>    Сетка вкладки с inline-редактированием ячеек
+                      (клик → правка → Enter сохраняет в Google Sheets)
+                      Авто-обновление каждые 30 сек.
+  /schedule           Просмотр расписания на выбранную дату
+  /schedule/<имя>/<дата>  Детали заданий
+  /contacts           Контакты потребителей (5 категорий + поиск)
+  /contacts/category/X    Список с пагинацией
+  /contacts/<id>      Карточка контакта
+  /arshin             Форма поиска в АРШИН + результаты + скачивание PDF
+  /billing            Поиск по биллингу ГВС (по адресу/наименованию)
+  /billing/<row>      Карточка объекта + ввод текущих показаний
+  /calculations       Расчёт тепловой нагрузки (форма)
+  /algorithms         Список алгоритмов (ИПУ, отключение, УУТЭ)
+  /algorithms/<key>   Шаги алгоритма (Назад/Далее)
+  /algorithms/devices Дерево настроек приборов (ВКТ, СПТ, ТВ7…)
+
+JSON API (за Basic Auth):
+  GET    /api/health
+  GET    /api/contacts/overview
+  GET    /api/contacts/category/:cat?page=N
+  GET    /api/contacts/:id
+  GET    /api/contacts/search?q=...
+  GET    /api/journal/months
+  GET    /api/journal/grid?month=...
+  PATCH  /api/journal/cell           {month, row, col, value}
+  GET    /api/algorithms
+  GET    /api/algorithms/:key
+  GET    /api/devices
+  GET    /api/schedule/people
+  GET    /api/schedule/day?name=...&date=YYYY-MM-DD
+  GET    /api/arshin/years
+  POST   /api/arshin/search          {org_title, year, mi_number, mit_notation}
+  POST   /api/arshin/pdf             {item}  → отдаёт application/pdf
+  GET    /api/billing/search?q=...
+  GET    /api/billing/object/:row
+  PATCH  /api/billing/object/:row/reading  {value, date}
+  POST   /api/calc/volume            {h, v, q, t_vn, v_podval}
+
+Источник правды для расписания — теперь новая Google Sheets таблица:
+  SHEETS_DOCUMENT_ID=1_vHpGst6uaaNmh1IkhgyuAMBa_aQ8yIZATBC43iQ2V4
+  Бот читает из неё через XLSX-export (раз в 15 мин в рабочие часы).
+  Сайт читает напрямую через Google Sheets API + OAuth (мгновенно)
+  и пишет туда же при правке ячеек.
+
+
+========================================
+  ОБНОВЛЕНИЕ ЗАВИСИМОСТЕЙ (gem'ы)
+========================================
+
+После git pull, если в Gemfile что-то менялось:
+  cd C:\max_bot
+  bundle install
+  Restart-Service MaxBot
+
+
+========================================
+  ПЕРЕУСТАНОВКА СЛУЖБЫ
+========================================
+
+Удалить:
+  C:\nssm\nssm-2.24\win64\nssm.exe remove MaxBot confirm
+
+Установить заново:
+  C:\nssm\nssm-2.24\win64\nssm.exe install MaxBot "C:\Ruby40-x64\bin\ruby.exe" "bot.rb"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBot AppDirectory "C:\max_bot"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBot AppExit Default Restart
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBot AppRestartDelay 5000
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBot AppStdout "C:\max_bot\log\service_stdout.log"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBot AppStderr "C:\max_bot\log\service_stderr.log"
+  C:\nssm\nssm-2.24\win64\nssm.exe set MaxBot Start SERVICE_AUTO_START
+  C:\nssm\nssm-2.24\win64\nssm.exe start MaxBot
