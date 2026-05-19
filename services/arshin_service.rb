@@ -395,16 +395,23 @@ module ArshinService
     raw_number_for_query = utf8_text(number).strip
     number_candidates = [raw_number_for_query]
     compact_number_for_query = raw_number_for_query.downcase.gsub(/\s+/, '')
-    paired_base =
-      if compact_number_for_query.match?(/\A\d+[гх]\z/)
-        compact_number_for_query.sub(/[гх]\z/, '')
-      elsif compact_number_for_query.match?(/\A\d+\z/)
-        compact_number_for_query
+    is_ktptr = mit_notation.to_s.strip.match?(/КТПТР/i)
+
+    if is_ktptr && compact_number_for_query.match?(/\A\d+[аa]?\z/i)
+      base = compact_number_for_query.sub(/[аa]\z/i, '')
+      number_candidates.unshift("#{base}/#{base}А") unless base.empty?
+    elsif !is_ktptr
+      paired_base =
+        if compact_number_for_query.match?(/\A\d+[гх]\z/)
+          compact_number_for_query.sub(/[гх]\z/, '')
+        elsif compact_number_for_query.match?(/\A\d+\z/)
+          compact_number_for_query
+        end
+      unless paired_base.to_s.empty?
+        number_candidates << paired_base
+        number_candidates << "#{paired_base} г/х"
+        number_candidates << "#{paired_base}г/х"
       end
-    unless paired_base.to_s.empty?
-      number_candidates << paired_base
-      number_candidates << "#{paired_base} г/х"
-      number_candidates << "#{paired_base}г/х"
     end
     if ArshinTypePriority.family_by_serial_key(serial_key) == 'pressure_sensor'
       if compact_number_for_query.match?(/\A\d+\z/)

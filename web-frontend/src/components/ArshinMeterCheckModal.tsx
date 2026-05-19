@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { arshinApi, type ArshinItem } from '../api/arshin'
 import type { MeteringRecord } from '../api/metering'
@@ -49,6 +49,9 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
     used_preferred_type?: boolean
   } | null>(null)
   const isTempSensor = device?.serialKey === 'temp_sensor_serial_1' || device?.serialKey === 'temp_sensor_serial_2'
+  const mitNotation = isTempSensor
+    ? (device?.serialKey === 'temp_sensor_serial_1' ? record.temp_sensor_1 : record.temp_sensor_2)
+    : undefined
 
   const opts = useQuery({
     queryKey: ['arshin', 'options'],
@@ -64,6 +67,7 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
       year: year.trim() || undefined,
       org_title: orgTitle.trim() || undefined,
       preferred_mit_notation: preferredType,
+      mit_notation: mitNotation || undefined,
       serial_key: device?.serialKey,
       meter_label: device?.label,
     }),
@@ -84,7 +88,7 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
       arshinApi.applyMeter(uuteId, {
         serial_key: device!.serialKey,
         item,
-        save_pdf: true,
+        
       }),
     onSuccess: (result, item) => {
       queryClient.setQueryData(['metering', 'detail', String(uuteId)], result.record)
@@ -100,12 +104,9 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
         onApplied?.(result.record)
       }
 
-      const parts = ['Данные из АРШИН сохранены в карточку.']
-      if (result.yadisk_path) parts.push(`PDF: ${result.yadisk_path}`)
-      if (result.pdf_error) parts.push(`PDF: ${result.pdf_error}`)
-      setMessage(parts.join(' '))
+      setMessage('ARSHIN data saved to the card.')
     },
-    onError: (err: Error) => setMessage(err.message || 'Не удалось применить'),
+    onError: (err: Error) => setMessage(err.message || 'Failed to apply'),
   })
 
   const runSearch = () => {
@@ -125,14 +126,14 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
       body: JSON.stringify({ [field]: serialMismatch.found }),
     })
       .then((res) => {
-        if (!res.ok) throw new Error('Не удалось обновить номер')
+        if (!res.ok) throw new Error('Failed to update serial')
         return res.json()
       })
       .then(() => {
         queryClient.invalidateQueries({ queryKey: ['metering', 'detail', String(uuteId)] })
         queryClient.invalidateQueries({ queryKey: ['metering', 'gspo'] })
         setEditableSerial(serialMismatch.found)
-        setMessage(`Номер обновлён: ${serialMismatch.current} → ${serialMismatch.found}`)
+        setMessage(`Serial updated: ${serialMismatch.current} -> ${serialMismatch.found}`)
         onApplied?.(queryClient.getQueryData(['metering', 'detail', String(uuteId)]) as MeteringRecord)
         setSerialMismatch(null)
       })
@@ -145,70 +146,70 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
     <div key={`${uuteId}-${device.serialKey}`} className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl">
         <div className="border-b p-4">
-          <h2 className="text-lg font-semibold">Проверка в АРШИН</h2>
+          <h2 className="text-lg font-semibold">Arshin check</h2>
           <p className="mt-1 text-sm text-gray-600">{device.label}</p>
           {preferredType && (
             <p className="mt-1 text-xs text-emerald-700">
-              Приоритетный тип: {preferredType}
+              Preferred type: {preferredType}
             </p>
           )}
         </div>
 
         <div className="space-y-3 overflow-y-auto p-4">
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-700">Заводской номер</span>
+            <span className="mb-1 block text-gray-700">Serial number</span>
             <input
               type="text"
               value={editableSerial}
               onChange={(event) => setEditableSerial(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Enter') runSearch() }}
               className="w-full rounded border px-3 py-2 text-sm"
-              placeholder="Введите номер прибора"
+              placeholder="Enter meter serial"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-700">Номер свидетельства</span>
+            <span className="mb-1 block text-gray-700">Certificate number</span>
             <input
               type="text"
               value={resultDocnum}
               onChange={(event) => setResultDocnum(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Enter') runSearch() }}
               className="w-full rounded border px-3 py-2 text-sm"
-              placeholder="Например: С-ЕВК/10-03-2026/510413687"
+              placeholder="Example: C-EVK/10-03-2026/510413687"
             />
           </label>
 
           {isTempSensor && (
             <p className="text-xs text-amber-700">
-              Для датчиков температуры номер может быть парным (например, с суффиксом «г/х»). Если по чистому номеру не найдено, попробуйте добавить «г/х».
+              Temperature sensors can be paired (for example with suffix "g/h"). If nothing is found by plain serial, try with "g/h".
             </p>
           )}
           <p className="text-xs text-gray-500">
             {year.trim()
-              ? `Поиск в году ${year}`
-              : 'Автопоиск по годам с текущего и шести предыдущих'}
+              ? `Search in year ${year}`
+              : 'Auto search by years from current and six previous'}
           </p>
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-700">Год поверки</span>
+            <span className="mb-1 block text-gray-700">Verification year</span>
             <select
               value={year}
               onChange={(event) => setYear(event.target.value)}
               className="w-full rounded border bg-white px-3 py-2 text-sm"
             >
-              <option value="">Авто</option>
+              <option value="">Auto</option>
               {(opts.data?.years ?? []).map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-700">Поверитель</span>
+            <span className="mb-1 block text-gray-700">Verifier</span>
             <select
               value={orgTitle}
               onChange={(event) => setOrgTitle(event.target.value)}
               className="w-full rounded border bg-white px-3 py-2 text-sm"
             >
-              <option value="">— не фильтровать —</option>
+              <option value="">— no filter —</option>
               {(opts.data?.orgs ?? []).map((org) => (
                 <option key={org} value={org}>{org}</option>
               ))}
@@ -221,7 +222,7 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
             onClick={runSearch}
             className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {search.isPending ? 'Ищу...' : 'Найти в АРШИН'}
+            {search.isPending ? 'Searching...' : 'Find in Arshin'}
           </button>
 
           {message && (
@@ -230,18 +231,18 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
 
           {search.error && (
             <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {(search.error as Error).message || 'Ошибка запроса'}
+              {(search.error as Error).message || 'Request failed'}
             </div>
           )}
 
           {serialMismatch && (
             <div className="rounded border border-amber-300 bg-amber-50 p-4">
               <p className="text-sm font-medium text-amber-900">
-                Номер в АРШИН отличается от номера в базе
+                Arshin serial differs from DB serial
               </p>
               <p className="mt-1 text-sm text-amber-800">
-                В базе: <strong>{serialMismatch.current}</strong>
-                {' '}→ В АРШИН: <strong>{serialMismatch.found}</strong>
+                In DB: <strong>{serialMismatch.current}</strong>
+                {' '}→ In Arshin: <strong>{serialMismatch.found}</strong>
               </p>
               <div className="mt-3 flex gap-2">
                 <button
@@ -249,14 +250,14 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
                   onClick={updateSerial}
                   className="rounded bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-700"
                 >
-                  Обновить номер в базе
+                  Update serial in DB
                 </button>
                 <button
                   type="button"
                   onClick={() => setSerialMismatch(null)}
                   className="rounded border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100"
                 >
-                  Оставить как есть
+                  Keep as is
                 </button>
               </div>
             </div>
@@ -265,7 +266,7 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
           {(cachedResult || search.data) && (
             <div className="space-y-3">
               {(cachedResult?.used_preferred_type || search.data?.used_preferred_type) && (
-                <p className="text-xs text-emerald-700">Найдено по приоритетному типу</p>
+                <p className="text-xs text-emerald-700">Found by preferred type</p>
               )}
               <pre className="whitespace-pre-wrap rounded border bg-gray-50 p-3 text-sm font-sans">
                 {cachedResult?.text ?? search.data?.text}
@@ -280,14 +281,14 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="font-medium">
-                          №{i + 1} · {item.mi_number || '—'}
+                          #{i + 1} · {item.mi_number || '—'}
                         </div>
                         <p className="text-gray-700">{item.mit_notation || ''}</p>
                         <p className="mt-1">
-                          Действительна до:{' '}
+                          Valid until:{' '}
                           <span className="font-medium">{item.valid_date || '—'}</span>
                         </p>
-                        <p className="text-gray-600">Дата поверки: {item.verification_date || '—'}</p>
+                        <p className="text-gray-600">Verification date: {item.verification_date || '—'}</p>
                         <p className="text-gray-600">{item.org_title || ''}</p>
                         {item.registry_url && (
                           <a
@@ -296,11 +297,11 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
                             rel="noreferrer"
                             className="mt-2 inline-block text-sm font-medium text-blue-700 hover:underline"
                           >
-                            Открыть запись в АРШИН
+                            Open in Arshin
                           </a>
                         )}
                         <p className={`mt-2 inline-block rounded px-2 py-0.5 text-xs font-semibold ${ok ? 'bg-emerald-200 text-emerald-900' : 'bg-red-200 text-red-900'}`}>
-                          Пригодность: {ok ? 'Да' : 'Нет'}
+                          Applicability: {ok ? 'Yes' : 'No'}
                         </p>
                       </div>
                       <button
@@ -309,7 +310,7 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
                         onClick={() => apply.mutate(item)}
                         className="shrink-0 rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
                       >
-                        {apply.isPending ? '…' : 'Применить и PDF на Я.Диск'}
+                        {apply.isPending ? '...' : 'Apply'}
                       </button>
                     </div>
                   </div>
@@ -325,10 +326,11 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
             onClick={onClose}
             className="rounded border bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
-            Закрыть
+            Close
           </button>
         </div>
       </div>
     </div>
   )
 }
+
