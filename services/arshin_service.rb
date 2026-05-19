@@ -283,7 +283,8 @@ module ArshinService
   def lookup_for_meter(serial:, valid_until: nil, year: nil, org_title: nil, mit_notation: nil, meter_label: nil, preferred_mit_notation: nil, serial_key: nil, result_docnum: nil)
     return { text: 'Интеграция АРШИН отключена (ARSHIN_ENABLED=0).', items: [], years_tried: [], suggested_years: [], used_preferred_type: false } unless enabled?
 
-    number = serial.to_s.strip
+    number = serial.to_s.strip.force_encoding('UTF-8')
+    mit_notation = mit_notation.to_s.strip.force_encoding('UTF-8')
     doc_number = result_docnum.to_s.strip
     if number.empty? && doc_number.empty?
       return { text: 'Укажите заводской номер прибора или номер свидетельства.', items: [], years_tried: [], suggested_years: [], used_preferred_type: false }
@@ -394,8 +395,8 @@ module ArshinService
     fallback_link = shorten_url(registry_link_for_serial(number, year: year_hint.to_s.strip.empty? ? nil : year_hint.to_s.strip))
     raw_number_for_query = utf8_text(number).strip
     number_candidates = [raw_number_for_query]
-    compact_number_for_query = raw_number_for_query.downcase.gsub(/\s+/, '')
-    is_ktptr = mit_notation.to_s.strip.match?(/КТПТР/i)
+    compact_number_for_query = raw_number_for_query.dup.force_encoding('UTF-8').downcase.gsub(/\s+/, '')
+    is_ktptr = mit_notation.to_s.strip.force_encoding('UTF-8').match?(/КТПТР/i)
 
     if is_ktptr && compact_number_for_query.match?(/\A\d+[аa]?\z/i)
       base = compact_number_for_query.sub(/[аa]\z/i, '')
@@ -403,7 +404,9 @@ module ArshinService
         number_candidates.unshift("#{base}/#{base}А")
         number_candidates << base unless base == compact_number_for_query
       end
+      STDERR.puts "[ARSHIN KTPTR] is_ktptr=#{is_ktptr}, input=#{compact_number_for_query.inspect}, base=#{base.inspect}, candidates=#{number_candidates.inspect}"
     elsif !is_ktptr
+      STDERR.puts "[ARSHIN KTPTR] is_ktptr=#{is_ktptr}, mit_notation=#{mit_notation.inspect}"
       paired_base =
         if compact_number_for_query.match?(/\A\d+[гх]\z/)
           compact_number_for_query.sub(/[гх]\z/, '')
