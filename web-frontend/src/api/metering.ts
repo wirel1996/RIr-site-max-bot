@@ -307,5 +307,4 @@ export const meteringApi = {
     return api.upload<WaterDisconnectionImportResult>('/metering/water/import-disconnections', formData)
   },
   waterDisconnectedExportUrl: () => '/api/metering/water/disconnected-export',
-  normalizeWaterSupplied: () => api.post<{ ok: true }>('/metering/water/normalize-water-supplied', {}),
 }

@@ -293,11 +293,10 @@ module WaterRegistryDB
 
   def disconnected_points(db)
     db.execute(<<~SQL).map { |row| row['point'].to_s.strip }.reject(&:empty?)
-      SELECT DISTINCT COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) AS point
+      SELECT DISTINCT TRIM(actual_connection_point) AS point
       FROM water_registry_rows
       WHERE lower_ru(COALESCE(water_supplied, '')) != 'да'
-        AND (COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) IS NOT NULL
-             AND COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) != '')
+        AND COALESCE(TRIM(actual_connection_point), '') != ''
       ORDER BY numeric_point(point)
     SQL
   end
@@ -305,7 +304,7 @@ module WaterRegistryDB
   def disconnected_points_detail(db)
     db.execute(<<~SQL)
       SELECT
-        COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) AS point,
+        TRIM(actual_connection_point) AS point,
         gspo_name,
         standalone_address,
         leader_name,
@@ -314,14 +313,15 @@ module WaterRegistryDB
         note
       FROM water_registry_rows
       WHERE lower_ru(COALESCE(water_supplied, '')) != 'да'
-      ORDER BY numeric_point(COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number)), gspo_name, id
+        AND COALESCE(TRIM(actual_connection_point), '') != ''
+      ORDER BY numeric_point(TRIM(actual_connection_point)), gspo_name, id
     SQL
   end
 
   def cascade_water_supplied(db, point, value)
     now = Time.now.to_i
     db.execute(
-      "UPDATE water_registry_rows SET water_supplied = ?, updated_at = ? WHERE COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) = ?",
+      "UPDATE water_registry_rows SET water_supplied = ?, updated_at = ? WHERE TRIM(actual_connection_point) = ?",
       [value, now, point]
     )
   end

@@ -1432,12 +1432,6 @@ class ContactsWeb < Sinatra::Base
     send_file tmpfile.path, filename: filename, type: 'application/vnd.ms-excel', disposition: 'attachment'
   end
 
-  post '/api/metering/water/normalize-water-supplied' do
-    require_not_water_payment_only!
-    result = WaterRegistryService.normalize_water_supplied_flags!
-    json_response(result)
-  end
-
   # ---- Schedule (view-only ?? ????) ----
   get '/api/schedule/people' do
     halt 503, json_error('sheets not configured', 503) unless SheetsService.enabled?

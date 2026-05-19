@@ -128,11 +128,6 @@ module WaterRegistryService
     { ok: true }
   end
 
-  def normalize_water_supplied_flags!
-    WaterRegistryDB.with_db { |db| WaterRegistryDB.normalize_water_supplied_flags(db) }
-    { ok: true }
-  end
-
   def disconnected_points
     WaterRegistryDB.with_db do |db|
       points = WaterRegistryDB.disconnected_points(db)
@@ -191,7 +186,6 @@ module WaterRegistryService
 
     if values['water_supplied'].to_s.strip.downcase == 'да'
       point = values['actual_connection_point'].to_s.strip
-      point = values['point_number'].to_s.strip if point.empty?
       if !point.empty?
         WaterRegistryDB.with_db { |db| WaterRegistryDB.cascade_water_supplied(db, point, 'да') }
       end
@@ -241,7 +235,6 @@ module WaterRegistryService
     if values.key?('water_supplied') && values['water_supplied'].to_s.strip.downcase == 'да'
       merged = existing.merge(values)
       point = merged['actual_connection_point'].to_s.strip
-      point = merged['point_number'].to_s.strip if point.empty?
       if !point.empty?
         WaterRegistryDB.with_db { |db| WaterRegistryDB.cascade_water_supplied(db, point, 'да') }
       end
