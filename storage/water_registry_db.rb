@@ -301,23 +301,6 @@ module WaterRegistryDB
     SQL
   end
 
-  def disconnected_points_detail(db)
-    db.execute(<<~SQL)
-      SELECT
-        TRIM(actual_connection_point) AS point,
-        gspo_name,
-        standalone_address,
-        leader_name,
-        phone,
-        water_supplied,
-        note
-      FROM water_registry_rows
-      WHERE lower_ru(COALESCE(water_supplied, '')) != 'да'
-        AND COALESCE(TRIM(actual_connection_point), '') != ''
-      ORDER BY numeric_point(TRIM(actual_connection_point)), gspo_name, id
-    SQL
-  end
-
   def cascade_water_supplied(db, point, value)
     now = Time.now.to_i
     db.execute(

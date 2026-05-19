@@ -1314,18 +1314,18 @@ class ContactsWeb < Sinatra::Base
     book = Spreadsheet::Workbook.new
     sheet = book.create_worksheet(name: 'Отключённые точки')
 
-    headers = ['Точка', 'Название', 'Адрес', 'Председатель', 'Телефон', 'Подана вода', 'Примечание']
-    headers.each_with_index { |h, i| sheet[0, i] = h }
-    sheet.row(0).default_format = Spreadsheet::Format.new(weight: :bold)
+    col_size = 20
+    num_cols = (rows.size + col_size - 1) / col_size
+
+    (0...num_cols).each do |col_idx|
+      sheet[0, col_idx] = "Точка"
+      sheet.row(0).set_format(col_idx, Spreadsheet::Format.new(weight: :bold))
+    end
 
     rows.each_with_index do |row, idx|
-      sheet[idx + 1, 0] = row[:point]
-      sheet[idx + 1, 1] = row[:gspo_name]
-      sheet[idx + 1, 2] = row[:standalone_address]
-      sheet[idx + 1, 3] = row[:leader_name]
-      sheet[idx + 1, 4] = row[:phone]
-      sheet[idx + 1, 5] = row[:water_supplied]
-      sheet[idx + 1, 6] = row[:note]
+      col = idx / col_size
+      row_in_col = idx % col_size
+      sheet[row_in_col + 1, col] = row[:point]
     end
 
     date = Date.today.strftime('%Y%m%d')
