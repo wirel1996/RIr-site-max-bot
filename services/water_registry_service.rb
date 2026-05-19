@@ -124,7 +124,45 @@ module WaterRegistryService
 
   def normalize_existing!
     WaterRegistryDB.with_db { |db| WaterRegistryDB.normalize_metering_flags(db) }
+    WaterRegistryDB.with_db { |db| WaterRegistryDB.normalize_water_supplied_flags(db) }
     { ok: true }
+  end
+
+  def normalize_water_supplied_flags!
+    WaterRegistryDB.with_db { |db| WaterRegistryDB.normalize_water_supplied_flags(db) }
+    { ok: true }
+  end
+
+  def disconnected_points
+    WaterRegistryDB.with_db do |db|
+      points = WaterRegistryDB.disconnected_points(db)
+      { points: points, total: points.size }
+    end
+  end
+
+  def disconnected_points_export
+    WaterRegistryDB.with_db do |db|
+      rows = WaterRegistryDB.disconnected_points_detail(db)
+      seen = {}
+      unique = []
+      rows.each do |row|
+        point = row['point'].to_s.strip
+        next if point.empty?
+        next if seen[point]
+
+        seen[point] = true
+        unique << {
+          point: point,
+          gspo_name: row['gspo_name'].to_s.strip,
+          standalone_address: row['standalone_address'].to_s.strip,
+          leader_name: row['leader_name'].to_s.strip,
+          phone: row['phone'].to_s.strip,
+          water_supplied: row['water_supplied'].to_s.strip,
+          note: row['note'].to_s.strip
+        }
+      end
+      unique
+    end
   end
 
   def create(attrs)
@@ -150,6 +188,15 @@ module WaterRegistryService
     end
     row = WaterRegistryDB.with_db { |db| WaterRegistryDB.create(db, values) }
     sync_metering_presence_from_water!
+
+    if values['water_supplied'].to_s.strip.downcase == 'да'
+      point = values['actual_connection_point'].to_s.strip
+      point = values['point_number'].to_s.strip if point.empty?
+      if !point.empty?
+        WaterRegistryDB.with_db { |db| WaterRegistryDB.cascade_water_supplied(db, point, 'да') }
+      end
+    end
+
     public_row(row, detail: true)
   end
 
@@ -190,6 +237,16 @@ module WaterRegistryService
 
     WaterRegistryDB.with_db { |db| WaterRegistryDB.update(db, id, values) }
     sync_metering_presence_from_water!
+
+    if values.key?('water_supplied') && values['water_supplied'].to_s.strip.downcase == 'да'
+      merged = existing.merge(values)
+      point = merged['actual_connection_point'].to_s.strip
+      point = merged['point_number'].to_s.strip if point.empty?
+      if !point.empty?
+        WaterRegistryDB.with_db { |db| WaterRegistryDB.cascade_water_supplied(db, point, 'да') }
+      end
+    end
+
     find(id)
   end
 

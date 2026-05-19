@@ -51,6 +51,9 @@ tmp/
 storage/users.json
 storage/session_secret
 
+# Claude settings (may contain secrets)
+.claude/settings.local.json
+
 # SQLite WAL/SHM temp files
 *.db-shm
 *.db-wal

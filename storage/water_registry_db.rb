@@ -291,6 +291,49 @@ module WaterRegistryDB
   end
   private_class_method :order_clause
 
+  def disconnected_points(db)
+    db.execute(<<~SQL).map { |row| row['point'].to_s.strip }.reject(&:empty?)
+      SELECT DISTINCT COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) AS point
+      FROM water_registry_rows
+      WHERE lower_ru(COALESCE(water_supplied, '')) != 'да'
+        AND (COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) IS NOT NULL
+             AND COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) != '')
+      ORDER BY numeric_point(point)
+    SQL
+  end
+
+  def disconnected_points_detail(db)
+    db.execute(<<~SQL)
+      SELECT
+        COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) AS point,
+        gspo_name,
+        standalone_address,
+        leader_name,
+        phone,
+        water_supplied,
+        note
+      FROM water_registry_rows
+      WHERE lower_ru(COALESCE(water_supplied, '')) != 'да'
+      ORDER BY numeric_point(COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number)), gspo_name, id
+    SQL
+  end
+
+  def cascade_water_supplied(db, point, value)
+    now = Time.now.to_i
+    db.execute(
+      "UPDATE water_registry_rows SET water_supplied = ?, updated_at = ? WHERE COALESCE(NULLIF(TRIM(actual_connection_point), ''), point_number) = ?",
+      [value, now, point]
+    )
+  end
+
+  def normalize_water_supplied_flags(db)
+    now = Time.now.to_i
+    db.execute(
+      "UPDATE water_registry_rows SET water_supplied = 'нет', updated_at = ? WHERE COALESCE(water_supplied, '') = ''",
+      [now]
+    )
+  end
+
   def register_numeric_point(db)
     db.create_function('numeric_point', 1) do |func, value|
       func.result = value.to_s.gsub(',', '.').to_f

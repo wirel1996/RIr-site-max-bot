@@ -118,6 +118,7 @@ class ContactsWeb < Sinatra::Base
       return true if request.get? && path == '/api/metering/water'
       return true if request.get? && path.match?(%r{\A/api/metering/water/\d+\z})
       return true if request.patch? && path.match?(%r{\A/api/metering/water/\d+\z})
+      return true if request.get? && path == '/api/metering/water/disconnected-export'
 
       false
     end
@@ -1387,6 +1388,54 @@ class ContactsWeb < Sinatra::Base
     json_response(result)
   rescue ArgumentError => e
     halt 400, json_error(e.message, 400)
+  end
+
+  get '/api/metering/water/disconnected-export' do
+    require_not_water_payment_only!
+    require 'spreadsheet'
+    require 'tempfile'
+    require 'date'
+
+    rows = WaterRegistryService.disconnected_points_export
+    halt 404, json_error('Нет отключённых точек для выгрузки', 404) if rows.empty?
+
+    Spreadsheet.client_encoding = 'UTF-8'
+    book = Spreadsheet::Workbook.new
+    sheet = book.create_worksheet(name: 'Отключённые точки')
+
+    headers = ['Точка', 'Название', 'Адрес', 'Председатель', 'Телефон', 'Подана вода', 'Примечание']
+    headers.each_with_index { |h, i| sheet[0, i] = h }
+    sheet.row(0).default_format = Spreadsheet::Format.new(weight: :bold)
+
+    rows.each_with_index do |row, idx|
+      sheet[idx + 1, 0] = row[:point]
+      sheet[idx + 1, 1] = row[:gspo_name]
+      sheet[idx + 1, 2] = row[:standalone_address]
+      sheet[idx + 1, 3] = row[:leader_name]
+      sheet[idx + 1, 4] = row[:phone]
+      sheet[idx + 1, 5] = row[:water_supplied]
+      sheet[idx + 1, 6] = row[:note]
+    end
+
+    date = Date.today.strftime('%Y%m%d')
+    filename = "Реестр_отключенных_#{date}.xls"
+    tmpfile = Tempfile.new(['disconnected', '.xls'])
+    tmpfile.close
+    book.write(tmpfile.path)
+
+    audit!(
+      action: 'water_disconnected_export',
+      entity_type: 'summer_water',
+      entity_label: "Выгрузка отключённых точек (#{rows.size})"
+    )
+
+    send_file tmpfile.path, filename: filename, type: 'application/vnd.ms-excel', disposition: 'attachment'
+  end
+
+  post '/api/metering/water/normalize-water-supplied' do
+    require_not_water_payment_only!
+    result = WaterRegistryService.normalize_water_supplied_flags!
+    json_response(result)
   end
 
   # ---- Schedule (view-only ?? ????) ----

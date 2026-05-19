@@ -753,6 +753,13 @@ export default function WaterRegistry() {
                   >
                     Скачать телефонограмму
                   </button>
+                  <a
+                    href={meteringApi.waterDisconnectedExportUrl()}
+                    className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-gray-100"
+                    onClick={() => setActionsOpen(false)}
+                  >
+                    Скачать реестр отключенных
+                  </a>
                   <button
                     type="button"
                     onClick={() => {
@@ -767,6 +774,22 @@ export default function WaterRegistry() {
                     className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-gray-100"
                   >
                     Добавить запись
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await meteringApi.normalizeWaterSupplied()
+                        setMessage('Всем записям без "да" проставлено "нет" в поле "Подана вода"')
+                        await queryClient.invalidateQueries({ queryKey: ['metering', 'water'] })
+                      } catch {
+                        setMessage('Не удалось обновить флаги')
+                      }
+                      setActionsOpen(false)
+                    }}
+                    className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-gray-100"
+                  >
+                    Проставить "нет" где нет "да"
                   </button>
                   {(user?.role === 'admin' || user?.role === 'full') && (
                     <label className="block w-full cursor-pointer rounded px-3 py-2 text-left text-sm hover:bg-gray-100">
