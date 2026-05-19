@@ -79,9 +79,22 @@ class ContactsWeb < Sinatra::Base
       body = request.body.read.to_s.force_encoding('UTF-8')
       return {} if body.strip.empty?
 
-      JSON.parse(body)
+      result = JSON.parse(body)
+      _ensure_utf8(result)
+      result
     rescue JSON::ParserError
       halt 400, json_error('invalid JSON in body', 400)
+    end
+
+    def _ensure_utf8(obj)
+      case obj
+      when Hash
+        obj.each { |k, v| _ensure_utf8(v) }
+      when Array
+        obj.each { |v| _ensure_utf8(v) }
+      when String
+        obj.force_encoding('UTF-8')
+      end
     end
 
     def current_user

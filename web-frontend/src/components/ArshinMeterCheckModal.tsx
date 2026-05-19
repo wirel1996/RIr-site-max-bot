@@ -60,7 +60,9 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
   })
 
   const search = useMutation({
-    mutationFn: () => arshinApi.searchMeter({
+    mutationFn: () => {
+      console.log('[ARSHIN SEARCH] mitNotation:', mitNotation, 'serialKey:', device?.serialKey, 'record keys:', Object.keys(record).filter(k => k.includes('temp')))
+      return arshinApi.searchMeter({
       serial: editableSerial.trim(),
       result_docnum: resultDocnum.trim() || undefined,
       valid_until: validUntilFromDb || undefined,

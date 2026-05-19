@@ -285,6 +285,7 @@ module ArshinService
 
     number = serial.to_s.strip.force_encoding('UTF-8')
     mit_notation = mit_notation.to_s.strip.force_encoding('UTF-8')
+    STDERR.puts "[ARSHIN LOOKUP] serial=#{number.inspect}, mit_notation=#{mit_notation.inspect}, serial_key=#{serial_key.inspect}"
     doc_number = result_docnum.to_s.strip
     if number.empty? && doc_number.empty?
       return { text: 'Укажите заводской номер прибора или номер свидетельства.', items: [], years_tried: [], suggested_years: [], used_preferred_type: false }
