@@ -63,16 +63,17 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
     mutationFn: () => {
       console.log('[ARSHIN SEARCH] mitNotation:', mitNotation, 'serialKey:', device?.serialKey, 'record keys:', Object.keys(record).filter(k => k.includes('temp')))
       return arshinApi.searchMeter({
-      serial: editableSerial.trim(),
-      result_docnum: resultDocnum.trim() || undefined,
-      valid_until: validUntilFromDb || undefined,
-      year: year.trim() || undefined,
-      org_title: orgTitle.trim() || undefined,
-      preferred_mit_notation: preferredType,
-      mit_notation: mitNotation || undefined,
-      serial_key: device?.serialKey,
-      meter_label: device?.label,
-    }),
+        serial: editableSerial.trim(),
+        result_docnum: resultDocnum.trim() || undefined,
+        valid_until: validUntilFromDb || undefined,
+        year: year.trim() || undefined,
+        org_title: orgTitle.trim() || undefined,
+        preferred_mit_notation: preferredType,
+        mit_notation: mitNotation || undefined,
+        serial_key: device?.serialKey,
+        meter_label: device?.label,
+      })
+    },
   })
 
   useEffect(() => {

@@ -318,7 +318,7 @@ module ArshinService
         number,
         suggested_years,
         org_title,
-        nil,
+        mit_notation,
         meter_label,
         year,
         max_rows: 100,
@@ -331,7 +331,7 @@ module ArshinService
 
       # Если по типам ничего не найдено, возвращаемся к широкому поиску по номеру,
       # но найденные типы все равно поднимаем выше в выдаче.
-      result = _meter_search_by_years(number, suggested_years, org_title, nil, meter_label, year, max_rows: 50, preferred_rank_list: pool, target_valid_until: valid_until, serial_key: serial_key)
+      result = _meter_search_by_years(number, suggested_years, org_title, mit_notation, meter_label, year, max_rows: 50, preferred_rank_list: pool, target_valid_until: valid_until, serial_key: serial_key)
       used = Array(result[:items]).any? { |it| pool.any? { |p| arshin_item_matches_type?(it, p) } }
       return result.merge(used_preferred_type: used)
     end
