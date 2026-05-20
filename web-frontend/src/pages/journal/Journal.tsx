@@ -678,8 +678,8 @@ export default function Journal() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm">
                 <span className="font-semibold">{t.auditModal.title}:</span>{' '}
-                <span className="font-semibold">{fmtIso(auditModal.date)}</span>{' '}
-                <span className="font-semibold">{auditModal.time}</span>{' '}
+                <span className="text-base font-semibold">{fmtIso(auditModal.date)}</span>{' '}
+                <span className="text-base font-semibold">{auditModal.time}</span>{' '}
                 <span className="text-gray-700">· {auditModal.person}</span>
               </h2>
               <button className="text-xs border rounded px-2 py-1" onClick={() => setAuditModal((prev) => ({ ...prev, open: false }))}>{t.auditModal.close}</button>
