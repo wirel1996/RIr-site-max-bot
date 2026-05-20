@@ -173,20 +173,23 @@ module ContactsService
         total = ContactsDB.count_search_in_category(db, category, q)
         rows = ContactsDB.search_by_category(db, category, q, limit: size, offset: offset)
       end
-      [rows, total]
+      [rows.map { |row| with_registry_object(row) }, total]
     end
   end
 
   def find(id)
-    ContactsDB.with_db { |db| ContactsDB.find_by_id(db, id) }
+    ContactsDB.with_db do |db|
+      row = ContactsDB.find_by_id(db, id)
+      row && with_registry_object(row, db: db)
+    end
   end
 
   def create(category, attrs)
-    ContactsDB.with_db { |db| ContactsDB.create(db, category, attrs) }
+    ContactsDB.with_db { |db| with_registry_object(ContactsDB.create(db, category, attrs), db: db) }
   end
 
   def update(id, attrs)
-    ContactsDB.with_db { |db| ContactsDB.update_by_id(db, id, attrs) }
+    ContactsDB.with_db { |db| with_registry_object(ContactsDB.update_by_id(db, id, attrs), db: db) }
   end
 
   def delete(id)
@@ -227,8 +230,28 @@ module ContactsService
     q = query.to_s.strip
     return [] if q.empty?
 
-    ContactsDB.with_db { |db| ContactsDB.search(db, q, limit: SEARCH_LIMIT) }
+    ContactsDB.with_db { |db| ContactsDB.search(db, q, limit: SEARCH_LIMIT).map { |row| with_registry_object(row, db: db) } }
   end
+
+  def with_registry_object(row, db: nil)
+    return row unless row.is_a?(Hash)
+    object_id = row['object_id'].to_i
+    return row if object_id <= 0
+
+    object = if db
+               ContactsDB.find_registry_object(db, object_id)
+             else
+               ContactsDB.with_db { |inner| ContactsDB.find_registry_object(inner, object_id) }
+             end
+    return row unless object
+
+    merged = row.dup
+    merged['name'] = object['name'] unless object['name'].to_s.strip.empty?
+    merged['address'] = object['address'] unless object['address'].to_s.strip.empty?
+    merged['identifier'] = object['identifier'] unless object['identifier'].to_s.strip.empty?
+    merged
+  end
+  private_class_method :with_registry_object
 
   def short_label(record, fallback_index: nil)
     cat = record['category'].to_s

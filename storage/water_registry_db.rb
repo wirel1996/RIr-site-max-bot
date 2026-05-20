@@ -233,7 +233,7 @@ module WaterRegistryDB
 
   def editable_fields
     %w[
-      point_number actual_connection_point connected point_filter gspo_count_in_point gspo_name standalone_address
+      point_number actual_connection_point connected point_filter gspo_count_in_point
       leader_name phone metering_presence application application_date no_debt power_of_attorney contract uute
       uute_verified
       third_party_disconnection third_party_disconnection_note payment payment_date water_supplied verdict note all_except_payment tf_in_ts tf_in_ts_date connection_act

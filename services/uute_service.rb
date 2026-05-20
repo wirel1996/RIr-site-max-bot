@@ -8,7 +8,6 @@ require_relative '../storage/uute_db'
 require_relative 'water_registry_service'
 require_relative 'arshin_pdf_helpers'
 require_relative 'verification_pdf_service'
-require_relative 'yadisk_service'
 require_relative 'arshin_type_priority'
 require_relative '../storage/contacts_db'
 
@@ -358,7 +357,7 @@ module UuteService
     find(id)
   end
 
-  def apply_arshin_meter_check(id, serial_key:, item:, save_pdf: true)
+  def apply_arshin_meter_check(id, serial_key:, item:)
     uute_id = id.to_i
     key = serial_key.to_s.strip
     raise ArgumentError, 'serial_key required' if key.empty?
@@ -399,39 +398,6 @@ module UuteService
     date_field = ARSHIN_SERIAL_DATE_FIELDS[key]
     values[date_field] = valid_date unless valid_date.empty?
 
-    pdf_error = nil
-    yadisk_path = nil
-    if save_pdf
-      pdf_data = ArshinPdfHelpers.item_to_pdf_data(item, serial_override: item['mi_number'])
-      filename = "#{ArshinPdfHelpers.base_name(pdf_data, serial_key: key)}.pdf"
-      path, gen_err = VerificationPdfService.generate(pdf_data, filename: filename.sub(/\.pdf\z/i, ''))
-      if path.nil?
-        pdf_error = gen_err.to_s
-      elsif !path.end_with?('.pdf')
-        pdf_error = "PDF не сформирован: #{gen_err || 'Prawn недоступен'}"
-      elsif !YadiskService.enabled?
-        pdf_error = 'Яндекс.Диск не настроен (YANDEX_DISK_TOKEN)'
-      else
-        ok, dest, upload_err = YadiskService.upload_gspo_arshin_pdf(
-          name: row['name'],
-          address: row['address'],
-          local_path: path,
-          filename: filename
-        )
-        if ok
-          yadisk_path = dest
-          check_entry['yadisk_path'] = dest
-        else
-          pdf_error = upload_err.to_s
-        end
-      end
-      begin
-        File.delete(path) if path && File.exist?(path)
-      rescue StandardError
-        nil
-      end
-    end
-
     checks[key] = check_entry
     values['arshin_checks_json'] = JSON.generate(checks)
     ArshinTypePriority.ensure_type_for_serial_key(key, item['mit_notation'])
@@ -453,8 +419,6 @@ module UuteService
     {
       record: record,
       applicability: applicable,
-      yadisk_path: yadisk_path,
-      pdf_error: pdf_error,
       serial_mismatch: serial_mismatch
     }
   end
@@ -683,7 +647,7 @@ module UuteService
   end
 
   def editable_fields
-    (XLS_COLUMNS.keys - %w[source_row]) + %w[commercial_accounting]
+    ((XLS_COLUMNS.keys - %w[source_row name address identifier]) + %w[commercial_accounting]).uniq
   end
 
   def attrs_from_row(sheet, row_index, columns = nil)
@@ -848,6 +812,15 @@ module UuteService
 
   def public_row(row, detail: false)
     result = row.each_with_object({}) { |(k, v), memo| memo[k.to_sym] = v }
+    object_id = row['object_id'].to_i
+    if object_id > 0
+      object = ContactsDB.with_db { |db| ContactsDB.find_registry_object(db, object_id) }
+      if object
+        result[:name] = object['name'] unless object['name'].to_s.strip.empty?
+        result[:address] = object['address'] unless object['address'].to_s.strip.empty?
+        result[:identifier] = object['identifier'] unless object['identifier'].to_s.strip.empty?
+      end
+    end
     result[:periods] = parse_json(row['periods_json'])
     checks = parse_json(row['arshin_checks_json'])
     result[:arshin_checks] = checks.is_a?(Hash) ? checks : {}

@@ -377,6 +377,30 @@ module ContactsDB
     db.get_first_row('SELECT * FROM contacts WHERE id = ?', [id.to_i])
   end
 
+  def find_registry_object(db, id)
+    return nil if id.to_i <= 0
+
+    db.get_first_row('SELECT * FROM registry_objects WHERE id = ?', [id.to_i])
+  end
+
+  def upsert_registry_object(db, name:, address:, identifier:, source: 'contacts')
+    n = name.to_s.strip
+    a = address.to_s.strip
+    i = identifier.to_s.strip
+    row = db.get_first_row(
+      'SELECT id FROM registry_objects WHERE lower_ru(COALESCE(identifier, "")) = lower_ru(?) AND lower_ru(COALESCE(name, "")) = lower_ru(?) AND lower_ru(COALESCE(address, "")) = lower_ru(?) LIMIT 1',
+      [i, n, a]
+    )
+    return row['id'].to_i if row
+
+    now = Time.now.to_i
+    db.execute(
+      'INSERT INTO registry_objects(name, address, identifier, source, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)',
+      [n.empty? ? nil : n, a.empty? ? nil : a, i.empty? ? nil : i, source.to_s, now, now]
+    )
+    db.last_insert_row_id
+  end
+
   def update_by_id(db, id, attrs)
     allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected]
     values = attrs.each_with_object({}) do |(key, value), memo|
@@ -394,6 +418,11 @@ module ContactsDB
       "UPDATE contacts SET #{assignments} WHERE id = ?",
       values.values + [id.to_i]
     )
+    updated = find_by_id(db, id)
+    if updated && updated['category'].to_s == 'gspo' && updated['object_id'].to_i <= 0
+      object_id = upsert_registry_object(db, name: updated['name'], address: updated['address'], identifier: updated['identifier'])
+      db.execute('UPDATE contacts SET object_id = ?, updated_at = ? WHERE id = ?', [object_id, Time.now.to_i, id.to_i])
+    end
     find_by_id(db, id)
   end
 
@@ -427,7 +456,13 @@ module ContactsDB
         now
       ]
     )
-    find_by_id(db, db.last_insert_row_id)
+    record = find_by_id(db, db.last_insert_row_id)
+    if category.to_s == 'gspo'
+      object_id = upsert_registry_object(db, name: record['name'], address: record['address'], identifier: record['identifier'])
+      db.execute('UPDATE contacts SET object_id = ?, updated_at = ? WHERE id = ?', [object_id, Time.now.to_i, record['id'].to_i])
+      record = find_by_id(db, record['id'])
+    end
+    record
   end
 
   def delete_by_id(db, id)

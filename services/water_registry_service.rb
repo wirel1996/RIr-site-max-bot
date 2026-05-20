@@ -759,6 +759,15 @@ module WaterRegistryService
 
   def public_row(row, detail: false)
     result = row.each_with_object({}) { |(key, value), memo| memo[key.to_sym] = value }
+    object_id = row['object_id'].to_i
+    if object_id > 0
+      object = ContactsDB.with_db { |db| ContactsDB.find_registry_object(db, object_id) }
+      if object
+        result[:gspo_name] = object['name'] unless object['name'].to_s.strip.empty?
+        result[:standalone_address] = object['address'] unless object['address'].to_s.strip.empty?
+        result[:identifier] = object['identifier'] unless object['identifier'].to_s.strip.empty?
+      end
+    end
     result[:raw] = parse_json(row['raw_json']) if detail
     result.delete(:raw_json) unless detail
     result
