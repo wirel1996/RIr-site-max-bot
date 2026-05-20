@@ -143,6 +143,11 @@ module WaterRegistryService
   end
 
   def create(attrs)
+    forbidden = %w[gspo_name standalone_address identifier].select { |key| attrs.key?(key) || attrs.key?(key.to_sym) }
+    unless forbidden.empty?
+      raise ArgumentError, 'Для ГСПО поля gspo_name/standalone_address/identifier редактируются только через карточку объекта (registry_object).'
+    end
+
     values = attrs.each_with_object({}) do |(key, value), memo|
       k = key.to_s
       next unless WaterRegistryDB.editable_fields.include?(k)
@@ -179,6 +184,11 @@ module WaterRegistryService
   def update(id, attrs)
     existing = WaterRegistryDB.with_db { |db| WaterRegistryDB.find(db, id) }
     raise ArgumentError, 'water registry row not found' unless existing
+
+    forbidden = %w[gspo_name standalone_address identifier].select { |key| attrs.key?(key) || attrs.key?(key.to_sym) }
+    unless forbidden.empty?
+      raise ArgumentError, 'Для ГСПО поля gspo_name/standalone_address/identifier редактируются только через карточку объекта (registry_object).'
+    end
 
     values = attrs.each_with_object({}) do |(key, value), memo|
       k = key.to_s

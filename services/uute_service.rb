@@ -335,6 +335,10 @@ module UuteService
     raise ArgumentError, 'uute not found' unless existing
 
     allowed = editable_fields
+    forbidden = %w[name address identifier].select { |key| attrs.key?(key) || attrs.key?(key.to_sym) }
+    unless forbidden.empty?
+      raise ArgumentError, 'Для ГСПО поля name/address/identifier редактируются только через карточку объекта (registry_object).'
+    end
     values = attrs.each_with_object({}) do |(key, value), memo|
       k = key.to_s
       next unless allowed.include?(k)

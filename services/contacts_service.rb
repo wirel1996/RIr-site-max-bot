@@ -189,7 +189,19 @@ module ContactsService
   end
 
   def update(id, attrs)
-    ContactsDB.with_db { |db| with_registry_object(ContactsDB.update_by_id(db, id, attrs), db: db) }
+    ContactsDB.with_db do |db|
+      existing = ContactsDB.find_by_id(db, id)
+      raise ArgumentError, 'contact not found' unless existing
+
+      if existing['category'].to_s == 'gspo'
+        forbidden = %w[name address identifier].select { |key| attrs.key?(key) || attrs.key?(key.to_sym) }
+        unless forbidden.empty?
+          raise ArgumentError, 'Для ГСПО поля name/address/identifier редактируются только через карточку объекта (registry_object).'
+        end
+      end
+
+      with_registry_object(ContactsDB.update_by_id(db, id, attrs), db: db)
+    end
   end
 
   def delete(id)
