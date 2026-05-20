@@ -60,10 +60,6 @@ module ArshinService
     ].map(&:strip).reject(&:empty?).uniq
   end
 
-  def auto_org_titles
-    org_titles.reject { |v| v.to_s.include?('МЕНДЕЛЕЕВА') }
-  end
-
   def allowed_years
     (ENV['ARSHIN_ALLOWED_YEARS'] || '2026,2025,2024,2023,2022,2021')
       .split(',')
@@ -311,17 +307,11 @@ module ArshinService
       end
 
     org_for_search = org_title.to_s.strip
-    auto_orgs = auto_org_titles
-    org_chain = if org_for_search.empty?
-      auto_orgs + ['']
-    else
-      [org_for_search]
-    end
 
-    profile_log('lookup_start', serial_key: serial_key, serial: number, mit: mit_notation, years: suggested_years.join(','), org_chain: org_chain.join(' | '))
+    profile_log('lookup_start', serial_key: serial_key, serial: number, mit: mit_notation, years: suggested_years.join(','), org: org_for_search)
 
     if number.empty? && !doc_number.empty?
-      result = _search_by_doc_years(doc_number, suggested_years, org_chain, meter_label, year)
+      result = _search_by_doc_years(doc_number, suggested_years, org_for_search, meter_label, year)
       profile_log('lookup_done', serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
       return result.merge(used_preferred_type: false)
     end
@@ -336,81 +326,71 @@ module ArshinService
     # Сначала ищем строго по пулу приоритетных типов. Иначе общий поиск по номеру
     # может поймать чужой прибор в более свежем году и не дойти до правильного года.
     if use_preferred || !pool.empty?
-      org_chain.each do |org_candidate|
-        targeted = _meter_search_by_years(
-          number,
-          suggested_years,
-          org_candidate,
-          mit_notation,
-          meter_label,
-          year,
-          max_rows: 100,
-          preferred_filter_list: pool,
-          preferred_rank_list: pool,
-          target_valid_until: valid_until,
-          serial_key: serial_key
-        )
-        return targeted.merge(used_preferred_type: true) unless Array(targeted[:items]).empty?
-      end
+      targeted = _meter_search_by_years(
+        number,
+        suggested_years,
+        org_for_search,
+        mit_notation,
+        meter_label,
+        year,
+        max_rows: 100,
+        preferred_filter_list: pool,
+        preferred_rank_list: pool,
+        target_valid_until: valid_until,
+        serial_key: serial_key
+      )
+      return targeted.merge(used_preferred_type: true) unless Array(targeted[:items]).empty?
 
       # Если по типам ничего не найдено, возвращаемся к широкому поиску по номеру,
       # но найденные типы все равно поднимаем выше в выдаче.
-      org_chain.each do |org_candidate|
-        result = _meter_search_by_years(number, suggested_years, org_candidate, mit_notation, meter_label, year, max_rows: 50, preferred_rank_list: pool, target_valid_until: valid_until, serial_key: serial_key)
-        used = Array(result[:items]).any? { |it| pool.any? { |p| arshin_item_matches_type?(it, p) } }
-        return result.merge(used_preferred_type: used) unless Array(result[:items]).empty?
-      end
-      return result.merge(used_preferred_type: false)
+      result = _meter_search_by_years(number, suggested_years, org_for_search, mit_notation, meter_label, year, max_rows: 50, preferred_rank_list: pool, target_valid_until: valid_until, serial_key: serial_key)
+      used = Array(result[:items]).any? { |it| pool.any? { |p| arshin_item_matches_type?(it, p) } }
+      return result.merge(used_preferred_type: used)
     end
 
     # Обычный поиск без preferred
-    org_chain.each do |org_candidate|
-      result = _meter_search_by_years(number, suggested_years, org_candidate, mit_notation, meter_label, year, target_valid_until: valid_until, serial_key: serial_key)
-      return result.merge(used_preferred_type: false) unless Array(result[:items]).empty?
-    end
+    result = _meter_search_by_years(number, suggested_years, org_for_search, mit_notation, meter_label, year, target_valid_until: valid_until, serial_key: serial_key)
     profile_log('lookup_done', serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
     result.merge(used_preferred_type: false)
   end
 
-  def _search_by_doc_years(doc_number, suggested_years, org_titles_for_search, meter_label, year_hint)
+  def _search_by_doc_years(doc_number, suggested_years, org_title, meter_label, year_hint)
     years_tried = []
     last_text = nil
 
     suggested_years.each_with_index do |y, idx|
       sleep(0.6) if idx.positive?
       years_tried << y
-      Array(org_titles_for_search).each do |org_name|
-        params = { 'search' => doc_number, 'year' => y, 'rows' => '100' }
-        org = org_name.to_s.strip
-        params['org_title'] = org unless org.empty?
+      params = { 'search' => doc_number, 'year' => y, 'rows' => '100' }
+      org = org_title.to_s.strip
+      params['org_title'] = org unless org.empty?
 
-        items, error = arshin_fetch_items_by_params(params, return_full: true, max_rows: 50)
-        if error
-          last_text = "❌ #{error}"
-          next
-        end
-
-        filtered = Array(items).select do |item|
-          item['result_docnum'].to_s.downcase.include?(doc_number.downcase)
-        end
-        next if filtered.empty?
-
-        filtered = with_registry_links(filtered.map { |item| item.merge('_year' => y) })
-        header = []
-        header << "🔎 АРШИН — #{meter_label}" unless meter_label.to_s.strip.empty?
-        header << "Свидетельство: #{doc_number}"
-        header << "Год поиска: #{y}#{year_hint.to_s.strip.empty? ? ' (авто)' : ''}"
-        header << "Поверитель: #{org}" unless org.empty?
-        header << ''
-        link = shorten_url(registry_link_for_serial(doc_number, year: y))
-        return {
-          text: (header + ["Найдено #{filtered.size} записей", "Проверить на АРШИН: #{link}"]).join("\n"),
-          items: filtered.first(result_limit),
-          year: y,
-          years_tried: years_tried,
-          suggested_years: suggested_years
-        }
+      items, error = arshin_fetch_items_by_params(params, return_full: true, max_rows: 50)
+      if error
+        last_text = "❌ #{error}"
+        next
       end
+
+      filtered = Array(items).select do |item|
+        item['result_docnum'].to_s.downcase.include?(doc_number.downcase)
+      end
+      next if filtered.empty?
+
+      filtered = with_registry_links(filtered.map { |item| item.merge('_year' => y) })
+      header = []
+      header << "🔎 АРШИН — #{meter_label}" unless meter_label.to_s.strip.empty?
+      header << "Свидетельство: #{doc_number}"
+      header << "Год поиска: #{y}#{year_hint.to_s.strip.empty? ? ' (авто)' : ''}"
+      header << "Поверитель: #{org}" unless org.empty?
+      header << ''
+      link = shorten_url(registry_link_for_serial(doc_number, year: y))
+      return {
+        text: (header + ["Найдено #{filtered.size} записей", "Проверить на АРШИН: #{link}"]).join("\n"),
+        items: filtered.first(result_limit),
+        year: y,
+        years_tried: years_tried,
+        suggested_years: suggested_years
+      }
     end
 
     years_line = years_tried.empty? ? '—' : years_tried.join(', ')
