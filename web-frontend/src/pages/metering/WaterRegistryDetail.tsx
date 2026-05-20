@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { contactsApi, type Contact } from '../../api/contacts'
 import { meteringApi, type WaterRegistryRecord } from '../../api/metering'
+import RegistryObjectCard from '../../components/RegistryObjectCard'
 
 const FIELDS: Array<[keyof WaterRegistryRecord, string]> = [
   ['point_number', '№ точки'],
@@ -35,6 +36,7 @@ const FIELDS: Array<[keyof WaterRegistryRecord, string]> = [
   ['illegal_connection_2025', 'Незаконное подключение 2025'],
   ['illegal_connection_2026', 'Незаконное подключение 2026'],
 ]
+const OBJECT_FIELDS = new Set<keyof WaterRegistryRecord>(['gspo_name', 'standalone_address', 'identifier'])
 
 function contactLabel(contact: Contact) {
   return [contact.name, contact.consumer, contact.address, contact.identifier].filter(Boolean).join(' · ')
@@ -106,7 +108,10 @@ export default function WaterRegistryDetail() {
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
-    updateMutation.mutate(form as Partial<WaterRegistryRecord>)
+    const payload = Object.fromEntries(
+      Object.entries(form).filter(([key]) => !OBJECT_FIELDS.has(key as keyof WaterRegistryRecord)),
+    ) as Partial<WaterRegistryRecord>
+    updateMutation.mutate(payload)
   }
 
   return (
@@ -148,11 +153,19 @@ export default function WaterRegistryDetail() {
         </div>
       </div>
 
+      <RegistryObjectCard
+        objectId={data.object_id}
+        invalidateKeys={[
+          ['metering', 'water', 'detail', id],
+          ['metering', 'water'],
+        ]}
+      />
+
       {isEditing && (
         <form onSubmit={onSubmit} className="space-y-4 rounded-lg bg-white p-5 shadow">
           <h2 className="font-semibold">Редактирование заявки</h2>
           <div className="grid gap-3 md:grid-cols-2">
-            {FIELDS.map(([key, label]) => (
+            {FIELDS.filter(([key]) => !OBJECT_FIELDS.has(key)).map(([key, label]) => (
               <label key={key} className="block">
                 <span className="mb-1 block text-xs font-medium text-gray-600">{label}</span>
                 <input

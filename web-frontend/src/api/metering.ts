@@ -2,6 +2,7 @@ import { api } from './client'
 
 export type MeteringRecord = {
   id: number
+  object_id: number | null
   list_number: string | null
   contract_number: string | null
   name: string | null
@@ -125,6 +126,7 @@ export type MeteringImportResult = {
 
 export type WaterRegistryRecord = {
   id: number
+  object_id: number | null
   source_row: number | null
   point_number: string | null
   identifier: string | null
@@ -241,8 +243,8 @@ export const meteringApi = {
   admissionActUrl: (id: number) => `/api/metering/gspo/${id}/admission-act`,
   update: (id: number, payload: Partial<MeteringRecord>) =>
     api.patch<MeteringRecord>(`/metering/gspo/${id}`, payload),
-  applyArshin: (id: number, payload: { serial_key: string; item: Record<string, unknown>; save_pdf?: boolean }) =>
-    api.post<{ record: MeteringRecord; applicability: boolean; yadisk_path: string | null; pdf_error: string | null }>(
+  applyArshin: (id: number, payload: { serial_key: string; item: Record<string, unknown> }) =>
+    api.post<{ record: MeteringRecord; applicability: boolean }>(
       `/metering/gspo/${id}/arshin-apply`,
       payload,
     ),

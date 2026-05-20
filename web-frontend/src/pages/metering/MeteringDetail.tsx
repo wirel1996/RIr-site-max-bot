@@ -7,8 +7,10 @@ import { arshinApi, type ArshinItem } from '../../api/arshin'
 import { meteringApi, type MeteringRecord } from '../../api/metering'
 import { getPreferredMitNotation } from '../../utils/arshinTypePrefs'
 import { meteringRu as t } from '../../locales/ru/metering'
+import RegistryObjectCard from '../../components/RegistryObjectCard'
 
 const GROUPS: Array<[string, Array<[keyof MeteringRecord, string]>]> = t.detail.groups
+const OBJECT_FIELDS = new Set<keyof MeteringRecord>(['name', 'address', 'identifier'])
 
 export default function MeteringDetail() {
   const { id } = useParams<{ id: string }>()
@@ -207,7 +209,10 @@ export default function MeteringDetail() {
   const onSubmitGroup = (event: FormEvent, title: string, fields: Array<[keyof MeteringRecord, string]>) => {
     event.preventDefault()
     if (editingGroup !== title) return
-    const payload = fields.reduce((acc, [key]) => ({ ...acc, [key]: form[key] ?? '' }), {} as Partial<MeteringRecord>)
+    const payload = fields.reduce((acc, [key]) => {
+      if (OBJECT_FIELDS.has(key)) return acc
+      return { ...acc, [key]: form[key] ?? '' }
+    }, {} as Partial<MeteringRecord>)
     updateMutation.mutate(payload)
   }
 
@@ -238,6 +243,15 @@ export default function MeteringDetail() {
           </div>
         </div>
       </div>
+
+      <RegistryObjectCard
+        objectId={data.object_id}
+        invalidateKeys={[
+          ['metering', 'detail', id],
+          ['metering', 'gspo'],
+          ['metering', 'links', id],
+        ]}
+      />
 
       <section className="rounded-lg bg-white p-5 shadow">
         <h2 className="mb-3 font-semibold">{t.detail.contacts}</h2>
@@ -437,7 +451,7 @@ export default function MeteringDetail() {
                   <dt className="font-medium text-gray-600 sm:w-64 shrink-0">{label}</dt>
                   <dd className="mt-1 flex flex-1 flex-col gap-1 sm:mt-0">
                     <div className="flex items-start justify-between gap-2">
-                      {isGroupEditing ? (
+                      {isGroupEditing && !OBJECT_FIELDS.has(key) ? (
                         key === 'nearest_verification_date' ? (
                           <span className="whitespace-pre-line">{value ? String(value) : '-'}</span>
                         ) :
