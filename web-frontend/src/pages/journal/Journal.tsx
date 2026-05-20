@@ -44,7 +44,6 @@ function JournalCell({
   onSelect,
   onSave,
   onAuditClick,
-  onAuditHover,
 }: {
   value: string
   selected: boolean
@@ -56,11 +55,9 @@ function JournalCell({
   onSelect: (e: React.MouseEvent) => void
   onSave: (v: string) => Promise<void>
   onAuditClick: () => void
-  onAuditHover: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
-  const [showAuditTip, setShowAuditTip] = useState(false)
   const openingEditorRef = useRef(false)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
   useEffect(() => {
@@ -171,15 +168,6 @@ function JournalCell({
       <button
         type="button"
         className="absolute top-0 right-0 text-[10px] px-1 text-gray-500 hover:text-blue-700"
-        onMouseEnter={(e) => {
-          e.stopPropagation()
-          setShowAuditTip(true)
-          onAuditHover()
-        }}
-        onMouseLeave={(e) => {
-          e.stopPropagation()
-          setShowAuditTip(false)
-        }}
         onClick={(e) => {
           e.stopPropagation()
           onAuditClick()
@@ -187,11 +175,6 @@ function JournalCell({
       >
         !
       </button>
-      {showAuditTip && (
-        <div className="absolute top-4 right-0 z-30 max-w-[260px] rounded border border-gray-300 bg-white px-2 py-1 text-[10px] leading-tight shadow">
-          {t.auditModal.title}
-        </div>
-      )}
     </div>
   )
 }
@@ -525,12 +508,6 @@ export default function Journal() {
     saveCellColors.mutate(apiCells)
   }, [selectedCells, cellColors, saveCellColors])
 
-  const loadAuditHint = async (date: string, time: string, person: string) => {
-    void date
-    void time
-    void person
-  }
-
   const openAuditModal = async (date: string, time: string, person: string) => {
     setAuditModal({ open: true, date, time, person, loading: true, error: '', logs: [] })
     try {
@@ -680,7 +657,6 @@ export default function Journal() {
                                   oldValue,
                                 })
                               }}
-                              onAuditHover={() => { void loadAuditHint(day.date, time, person) }}
                               onAuditClick={async () => {
                                 await openAuditModal(day.date, time, person)
                               }}
@@ -700,7 +676,12 @@ export default function Journal() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAuditModal((prev) => ({ ...prev, open: false }))}>
           <div className="w-[720px] max-w-[95vw] max-h-[85vh] overflow-auto rounded bg-white border shadow p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">{t.auditModal.title}: {fmtIso(auditModal.date)} {auditModal.time} · {auditModal.person}</h2>
+              <h2 className="text-sm">
+                <span className="font-semibold">{t.auditModal.title}:</span>{' '}
+                <span className="font-semibold">{fmtIso(auditModal.date)}</span>{' '}
+                <span className="font-semibold">{auditModal.time}</span>{' '}
+                <span className="text-gray-700">· {auditModal.person}</span>
+              </h2>
               <button className="text-xs border rounded px-2 py-1" onClick={() => setAuditModal((prev) => ({ ...prev, open: false }))}>{t.auditModal.close}</button>
             </div>
             {auditModal.loading && <div className="text-sm text-gray-600">{t.auditModal.loading}</div>}
