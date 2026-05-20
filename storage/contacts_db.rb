@@ -57,6 +57,17 @@ module ContactsDB
 
   def ensure_schema(db)
     db.execute_batch(<<~SQL)
+      CREATE TABLE IF NOT EXISTS registry_objects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        address TEXT,
+        identifier TEXT,
+        source TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_registry_objects_identifier ON registry_objects(identifier);
+
       CREATE TABLE IF NOT EXISTS contacts (
         id               INTEGER PRIMARY KEY AUTOINCREMENT,
         category         TEXT NOT NULL,
@@ -71,6 +82,7 @@ module ContactsDB
         postal_address   TEXT,
         notes            TEXT,
         identifier       TEXT,
+        object_id        INTEGER,
         metering_presence TEXT,
         disconnected     TEXT,
         sync_status      TEXT,
@@ -101,11 +113,13 @@ module ContactsDB
     db.execute('ALTER TABLE contacts ADD COLUMN email TEXT') unless columns.include?('email')
     db.execute('ALTER TABLE contacts ADD COLUMN postal_address TEXT') unless columns.include?('postal_address')
     db.execute('ALTER TABLE contacts ADD COLUMN identifier TEXT') unless columns.include?('identifier')
+    db.execute('ALTER TABLE contacts ADD COLUMN object_id INTEGER') unless columns.include?('object_id')
     db.execute('ALTER TABLE contacts ADD COLUMN metering_presence TEXT') unless columns.include?('metering_presence')
     db.execute('ALTER TABLE contacts ADD COLUMN disconnected TEXT') unless columns.include?('disconnected')
     db.execute('ALTER TABLE contacts ADD COLUMN sync_status TEXT') unless columns.include?('sync_status')
     db.execute('ALTER TABLE contacts ADD COLUMN sync_note TEXT') unless columns.include?('sync_note')
     db.execute('CREATE INDEX IF NOT EXISTS idx_contacts_identifier ON contacts(identifier)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_contacts_object_id ON contacts(object_id)')
     db.execute(<<~SQL)
       CREATE TRIGGER IF NOT EXISTS trg_contacts_identifier_immutable
       BEFORE UPDATE OF identifier ON contacts

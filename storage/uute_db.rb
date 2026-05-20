@@ -52,6 +52,7 @@ module UuteDB
         name TEXT,
         address TEXT,
         identifier TEXT,
+        object_id INTEGER,
         input_kind TEXT,
         merge_note TEXT,
         note TEXT,
@@ -174,6 +175,8 @@ module UuteDB
     SQL
 
     columns = db.execute('PRAGMA table_info(uute_objects)').map { |row| row['name'] }
+    db.execute('ALTER TABLE uute_objects ADD COLUMN object_id INTEGER') unless columns.include?('object_id')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_uute_object_id ON uute_objects(object_id)')
     {
       'seal_calculator' => 'TEXT',
       'seal_flowmeter_1' => 'TEXT',

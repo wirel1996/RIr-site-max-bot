@@ -48,6 +48,7 @@ module WaterRegistryDB
         source_row INTEGER,
         point_number TEXT,
         identifier TEXT,
+        object_id INTEGER,
         actual_connection_point TEXT,
         connected TEXT,
         point_filter TEXT,
@@ -108,6 +109,8 @@ module WaterRegistryDB
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN tf_in_ts_date TEXT') unless columns.include?('tf_in_ts_date')
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN payment_date TEXT') unless columns.include?('payment_date')
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN uute_verified TEXT') unless columns.include?('uute_verified')
+    db.execute('ALTER TABLE water_registry_rows ADD COLUMN object_id INTEGER') unless columns.include?('object_id')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_water_registry_object_id ON water_registry_rows(object_id)')
   end
 
   def upsert_row(db, attrs)
