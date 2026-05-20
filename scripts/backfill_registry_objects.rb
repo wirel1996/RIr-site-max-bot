@@ -9,11 +9,8 @@ def norm(value)
   value.to_s.strip
 end
 
-def key_for(identifier, name, address)
-  id = norm(identifier).downcase
-  nm = norm(name).downcase
-  ad = norm(address).downcase
-  [id, nm, ad].join('|')
+def key_for_name_address(name, address)
+  [norm(name).downcase, norm(address).downcase].join('|')
 end
 
 created = 0
@@ -21,19 +18,29 @@ linked_contacts = 0
 linked_uute = 0
 linked_water = 0
 
-registry_by_key = {}
+registry_by_uid = {}
+registry_uid_counts = Hash.new(0)
+registry_by_name_address = {}
 
 ContactsDB.with_db do |db|
   db.execute('SELECT id, identifier, name, address FROM registry_objects').each do |row|
-    registry_by_key[key_for(row['identifier'], row['name'], row['address'])] = row['id'].to_i
+    rid = row['id'].to_i
+    uid = norm(row['identifier']).downcase
+    registry_uid_counts[uid] += 1 unless uid.empty?
+    registry_by_uid[uid] = rid unless uid.empty?
+    registry_by_name_address[key_for_name_address(row['name'], row['address'])] = rid
   end
 
   contacts = db.execute('SELECT id, identifier, name, address, object_id FROM contacts')
   contacts.each do |row|
     next if row['object_id'].to_i > 0
 
-    key = key_for(row['identifier'], row['name'], row['address'])
-    object_id = registry_by_key[key]
+    uid = norm(row['identifier']).downcase
+    object_id = if !uid.empty? && registry_uid_counts[uid] == 1
+                  registry_by_uid[uid]
+                else
+                  registry_by_name_address[key_for_name_address(row['name'], row['address'])]
+                end
     unless object_id
       now = Time.now.to_i
       db.execute(
@@ -41,7 +48,11 @@ ContactsDB.with_db do |db|
         [norm(row['name']), norm(row['address']), norm(row['identifier']), 'contacts', now, now]
       )
       object_id = db.last_insert_row_id
-      registry_by_key[key] = object_id
+      registry_by_name_address[key_for_name_address(row['name'], row['address'])] = object_id
+      unless uid.empty?
+        registry_uid_counts[uid] += 1
+        registry_by_uid[uid] = object_id if registry_uid_counts[uid] == 1
+      end
       created += 1
     end
     db.execute('UPDATE contacts SET object_id = ?, updated_at = ? WHERE id = ?', [object_id, Time.now.to_i, row['id'].to_i])
@@ -54,8 +65,12 @@ UuteDB.with_db do |db|
   rows.each do |row|
     next if row['object_id'].to_i > 0
 
-    key = key_for(row['identifier'], row['name'], row['address'])
-    object_id = registry_by_key[key]
+    uid = norm(row['identifier']).downcase
+    object_id = if !uid.empty? && registry_uid_counts[uid] == 1
+                  registry_by_uid[uid]
+                else
+                  registry_by_name_address[key_for_name_address(row['name'], row['address'])]
+                end
     if object_id
       db.execute('UPDATE uute_objects SET object_id = ?, updated_at = ? WHERE id = ?', [object_id, Time.now.to_i, row['id'].to_i])
       linked_uute += 1
@@ -68,8 +83,12 @@ WaterRegistryDB.with_db do |db|
   rows.each do |row|
     next if row['object_id'].to_i > 0
 
-    key = key_for(row['identifier'], row['gspo_name'], row['standalone_address'])
-    object_id = registry_by_key[key]
+    uid = norm(row['identifier']).downcase
+    object_id = if !uid.empty? && registry_uid_counts[uid] == 1
+                  registry_by_uid[uid]
+                else
+                  registry_by_name_address[key_for_name_address(row['gspo_name'], row['standalone_address'])]
+                end
     if object_id
       db.execute('UPDATE water_registry_rows SET object_id = ?, updated_at = ? WHERE id = ?', [object_id, Time.now.to_i, row['id'].to_i])
       linked_water += 1
