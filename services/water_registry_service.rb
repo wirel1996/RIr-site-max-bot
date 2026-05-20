@@ -339,6 +339,50 @@ module WaterRegistryService
     { updated: values_by_contact_id.size }
   end
 
+  # Разовый пересчет Наличие ПУ в контактах по факту связей с УУТЭ.
+  def sync_metering_presence_from_links!
+    updated = 0
+    ContactsDB.with_db do |db|
+      contacts = db.execute("SELECT id FROM contacts WHERE category = 'gspo'")
+      contacts.each do |row|
+        contact_id = row['id'].to_i
+        links = UuteDB.with_db { |udb| UuteDB.links_for_contact(udb, contact_id) }
+        value = links.empty? ? 'Нет' : 'Да'
+        ContactsDB.update_metering_presence(db, contact_id, value)
+        updated += 1
+      end
+    end
+    { updated: updated }
+  end
+
+  # Ежедневный пересчет полей УУТЭ/поверки в воде на лето по текущим связям.
+  def refresh_water_uute_links!
+    updated = 0
+    WaterRegistryDB.with_db do |db|
+      rows = db.execute('SELECT id, contact_id, metering_presence FROM water_registry_rows')
+      rows.each do |row|
+        row_id = row['id'].to_i
+        contact_id = row['contact_id'].to_i
+        next unless contact_id.positive?
+
+        selected = selected_uute_for_contact(contact_id)
+        if selected
+          db.execute(
+            'UPDATE water_registry_rows SET uute = ?, uute_id = ?, uute_verification_until = ?, uute_match_note = ?, updated_at = ? WHERE id = ?',
+            ['Да', selected[:uute_id], selected[:verification_until].to_s, selected[:note].to_s, Time.now.to_i, row_id]
+          )
+        else
+          db.execute(
+            'UPDATE water_registry_rows SET uute = ?, uute_id = NULL, uute_verification_until = ?, uute_match_note = ?, updated_at = ? WHERE id = ?',
+            ['Нет', '', '', Time.now.to_i, row_id]
+          )
+        end
+        updated += 1
+      end
+    end
+    { updated: updated }
+  end
+
   def hydrate_from_contact!(values)
     contact_id = values['contact_id'].to_i
     return values unless contact_id.positive?

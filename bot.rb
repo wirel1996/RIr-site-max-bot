@@ -25,6 +25,7 @@ require_relative 'services/max_notify_service'
 require_relative 'services/journal_service'
 require_relative 'services/journal_notify_service'
 require_relative 'services/db_backup_service'
+require_relative 'services/water_registry_service'
 require_relative 'storage/user_profiles'
 require_relative 'storage/max_users_log'
 require_relative 'storage/journal_db'
@@ -2539,6 +2540,31 @@ rescue => e
   max_log("start_db_backup_scheduler error: #{e.class}: #{e.message}")
 end
 
+def daily_water_uute_refresh_job
+  result = WaterRegistryService.refresh_water_uute_links!
+  max_log("water_uute_refresh completed: updated=#{result[:updated]}")
+rescue => e
+  max_log("daily_water_uute_refresh_job error: #{e.class}: #{e.message}")
+end
+
+def start_water_uute_refresh_scheduler
+  @water_uute_scheduler ||= Rufus::Scheduler.new(timezone: 'Asia/Tomsk')
+  @last_water_uute_refresh_date ||= nil
+  @water_uute_scheduler.cron('* * * * *') do
+    now = Time.now.getlocal('+07:00')
+    next unless now.strftime('%H:%M') == '07:00'
+
+    today = now.to_date
+    next if @last_water_uute_refresh_date == today
+
+    daily_water_uute_refresh_job
+    @last_water_uute_refresh_date = today
+  end
+  max_log('Water UUTE refresh scheduler started (daily at 07:00, tz: Asia/Tomsk)')
+rescue => e
+  max_log("start_water_uute_refresh_scheduler error: #{e.class}: #{e.message}")
+end
+
 def start_max_long_polling
   return unless MAX_ENABLED && MAX_INBOUND_ENABLED
   return if MAX_BOT_TOKEN.empty?
@@ -2858,6 +2884,7 @@ def start_bot
   start_billing_monthly_reminder if BillingService.enabled?
   start_contacts_sync_scheduler if ContactsSyncService.enabled?
   start_db_backup_scheduler
+  start_water_uute_refresh_scheduler
   VerificationPdfService.cleanup_stale
 
   start_max_long_polling
