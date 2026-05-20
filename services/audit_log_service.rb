@@ -127,6 +127,8 @@ module AuditLogService
 
     if source.respond_to?(:key?) && source.key?(field)
       source[field].to_s
+    elsif source.respond_to?(:key?) && source.key?(field.to_sym)
+      source[field.to_sym].to_s
     elsif source.respond_to?(:key?) && source.key?(field.to_s)
       source[field.to_s].to_s
     else
