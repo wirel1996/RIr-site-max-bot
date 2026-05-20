@@ -13,7 +13,8 @@ module GoogleSheetsAPI
 
   API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
   OAUTH_URL = 'https://oauth2.googleapis.com/token'
-  TIMEOUT = 30
+  TIMEOUT = (ENV['GOOGLE_HTTP_TIMEOUT'] || '30').to_i
+  RETRIES = (ENV['GOOGLE_HTTP_RETRIES'] || '3').to_i
 
   @access_token = nil
   @access_token_expires_at = 0
@@ -59,27 +60,64 @@ module GoogleSheetsAPI
   private_class_method :refresh!
 
   def request(method, document_id, path, params = {}, body = nil)
-    uri = URI("#{API_BASE}/#{document_id}#{path}")
-    uri.query = URI.encode_www_form(params) unless params.empty?
+    attempts = [RETRIES, 1].max
+    last_error = nil
 
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
-    http.open_timeout = TIMEOUT
-    http.read_timeout = TIMEOUT
+    attempts.times do |idx|
+      begin
+        uri = URI("#{API_BASE}/#{document_id}#{path}")
+        uri.query = URI.encode_www_form(params) unless params.empty?
 
-    req = case method
-          when :get then Net::HTTP::Get.new(uri)
-          when :post then Net::HTTP::Post.new(uri)
-          when :put then Net::HTTP::Put.new(uri)
-          else raise "unsupported method: #{method}"
-          end
-    req['Authorization'] = "Bearer #{access_token}"
-    req['Content-Type'] = 'application/json'
-    req.body = JSON.generate(body) if body
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+        http.open_timeout = TIMEOUT
+        http.read_timeout = TIMEOUT
 
-    res = http.request(req)
-    [res.code.to_i, res.body.to_s]
+        req = case method
+              when :get then Net::HTTP::Get.new(uri)
+              when :post then Net::HTTP::Post.new(uri)
+              when :put then Net::HTTP::Put.new(uri)
+              else raise "unsupported method: #{method}"
+              end
+        req['Authorization'] = "Bearer #{access_token}"
+        req['Content-Type'] = 'application/json'
+        req.body = JSON.generate(body) if body
+
+        res = http.request(req)
+        code = res.code.to_i
+        response_body = res.body.to_s
+        if retryable_http_code?(code) && idx < attempts - 1
+          sleep(retry_delay(idx))
+          next
+        end
+        return [code, response_body]
+      rescue *retryable_exceptions => e
+        last_error = e
+        raise if idx >= attempts - 1
+
+        sleep(retry_delay(idx))
+      end
+    end
+
+    raise(last_error || 'Google request failed without response')
   end
+
+  def retryable_exceptions
+    [Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, EOFError]
+  end
+  private_class_method :retryable_exceptions
+
+  def retryable_http_code?(code)
+    code == 429 || code >= 500
+  end
+  private_class_method :retryable_http_code?
+
+  def retry_delay(attempt_idx)
+    base = 0.5 * (2**attempt_idx)
+    jitter = rand * 0.2
+    base + jitter
+  end
+  private_class_method :retry_delay
 
   # Список всех вкладок (sheets) в документе.
   def list_sheets(document_id)

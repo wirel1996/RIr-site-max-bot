@@ -62,6 +62,7 @@ module JournalService
 
   @refresh_thread_started = false
   @refresh_thread_mutex = Mutex.new
+  @snapshot_mutex = Mutex.new
 
   def document_id
     ENV['SHEETS_DOCUMENT_ID'].to_s.strip
@@ -172,20 +173,23 @@ module JournalService
   end
 
   def load_snapshot
-    return nil unless File.exist?(SNAPSHOT_FILE)
+    @snapshot_mutex.synchronize do
+      return nil unless File.exist?(SNAPSHOT_FILE)
 
-    raw = JSON.parse(File.read(SNAPSHOT_FILE, encoding: 'UTF-8'))
-    by_date = (raw['by_date'] || {}).each_with_object({}) do |(iso, v), h|
-      h[iso] = symbolize_keys(v)
-    end
-    sheet_meta = (raw['sheet_meta'] || {}).each_with_object({}) do |(name, v), h|
-      meta = symbolize_keys(v)
-      meta[:dates] = (v['dates'] || {}).each_with_object({}) do |(iso, dv), dh|
-        dh[iso] = symbolize_keys(dv)
+      raw = JSON.parse(File.read(SNAPSHOT_FILE, encoding: 'UTF-8'))
+      raw = sanitize_utf8(raw)
+      by_date = (raw['by_date'] || {}).each_with_object({}) do |(iso, v), h|
+        h[iso] = symbolize_keys(v)
       end
-      h[name] = meta
+      sheet_meta = (raw['sheet_meta'] || {}).each_with_object({}) do |(name, v), h|
+        meta = symbolize_keys(v)
+        meta[:dates] = (v['dates'] || {}).each_with_object({}) do |(iso, dv), dh|
+          dh[iso] = symbolize_keys(dv)
+        end
+        h[name] = meta
+      end
+      { by_date: by_date, sheet_meta: sheet_meta, scanned_at: raw['scanned_at'].to_i }
     end
-    { by_date: by_date, sheet_meta: sheet_meta, scanned_at: raw['scanned_at'].to_i }
   rescue StandardError => e
     warn "JournalService.load_snapshot error: #{e.class}: #{e.message}"
     nil
@@ -200,14 +204,54 @@ module JournalService
   def save_snapshot
     return unless @cache
 
-    FileUtils.mkdir_p(File.dirname(SNAPSHOT_FILE))
-    tmp = "#{SNAPSHOT_FILE}.tmp"
-    File.write(tmp, JSON.generate(@cache), encoding: 'UTF-8')
-    File.rename(tmp, SNAPSHOT_FILE)
+    @snapshot_mutex.synchronize do
+      FileUtils.mkdir_p(File.dirname(SNAPSHOT_FILE))
+      safe_cache = sanitize_utf8(@cache)
+      json = JSON.generate(safe_cache, ascii_only: false)
+      tmp = "#{SNAPSHOT_FILE}.tmp"
+      File.open(tmp, 'wb') do |f|
+        f.write(json.encode('UTF-8', invalid: :replace, undef: :replace, replace: ''))
+        f.flush
+        f.fsync
+      end
+      replace_file_with_retries(tmp, SNAPSHOT_FILE)
+    end
   rescue StandardError => e
     warn "JournalService.save_snapshot error: #{e.class}: #{e.message}"
   end
   private_class_method :save_snapshot
+
+  def replace_file_with_retries(src, dest, retries: 4)
+    attempts = [retries, 1].max
+    attempts.times do |i|
+      begin
+        FileUtils.mv(src, dest, force: true)
+        return
+      rescue Errno::EACCES
+        raise if i >= attempts - 1
+
+        sleep(0.05 * (i + 1))
+      end
+    end
+  end
+  private_class_method :replace_file_with_retries
+
+  def sanitize_utf8(obj)
+    case obj
+    when String
+      obj.encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
+    when Array
+      obj.map { |v| sanitize_utf8(v) }
+    when Hash
+      obj.each_with_object({}) do |(k, v), h|
+        key = k.is_a?(String) ? sanitize_utf8(k) : k
+        h[key] = sanitize_utf8(v)
+      end
+    else
+      obj
+    end
+  end
+  private_class_method :sanitize_utf8
 
   def ensure_refresh_thread
     @refresh_thread_mutex.synchronize do
@@ -406,10 +450,20 @@ module JournalService
           end
         end
         week = best_week
+        unless valid_week_payload?(week)
+          warn "JournalService.ensure_db_synced!: invalid week payload for #{week_start} (#{week.class})"
+          next
+        end
         rows = []
-        week[:values].each do |date_iso, by_time|
-          weekday = week[:days].find { |d| d[:date] == date_iso }&.dig(:weekday).to_s
+        values = week[:values].is_a?(Hash) ? week[:values] : {}
+        days = week[:days].is_a?(Array) ? week[:days] : []
+        values.each do |date_iso, by_time|
+          next unless by_time.is_a?(Hash)
+
+          weekday = days.find { |d| d[:date] == date_iso }&.dig(:weekday).to_s
           by_time.each do |time_slot, by_person|
+            next unless by_person.is_a?(Hash)
+
             by_person.each do |person, value|
               rows << {
                 date_iso: date_iso,
@@ -436,6 +490,13 @@ module JournalService
       JournalDB.set_meta(db, 'last_sync_at', now.to_s)
     end
   end
+
+  def valid_week_payload?(week)
+    return false unless week.is_a?(Hash)
+
+    week[:days].is_a?(Array) && week[:values].is_a?(Hash)
+  end
+  private_class_method :valid_week_payload?
 
   def filled_cells_count(week)
     return 0 unless week.is_a?(Hash)
