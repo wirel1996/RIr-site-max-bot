@@ -1459,6 +1459,13 @@ class ContactsWeb < Sinatra::Base
     end
 
     record = WaterRegistryService.update(id, body)
+    audit!(
+      action: 'water_update_touch',
+      entity_type: 'summer_water',
+      entity_id: id,
+      entity_label: water_label(record),
+      details: { fields: body.keys.map(&:to_s) }
+    )
     AuditLogService.record_changes(
       actor: current_user,
       action: 'water_update',
