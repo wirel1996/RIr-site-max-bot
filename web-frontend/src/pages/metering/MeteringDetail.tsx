@@ -94,11 +94,23 @@ export default function MeteringDetail() {
         try {
           const preferred = getPreferredMitNotation(device.serialKey)
           const validUntil = String(data[device.dateKey] ?? '').trim()
+          const mitNotationByDevice: Partial<Record<ArshinMeterDevice['serialKey'], keyof typeof data>> = {
+            calculator_serial: 'calculator_type',
+            flowmeter_serial_1: 'flowmeter_1',
+            flowmeter_serial_2: 'flowmeter_2',
+            temp_sensor_serial_1: 'temp_sensor_1',
+            temp_sensor_serial_2: 'temp_sensor_2',
+            pressure_sensor_serial_1: 'pressure_sensor_1',
+            pressure_sensor_serial_2: 'pressure_sensor_2',
+          }
+          const mitNotationField = mitNotationByDevice[device.serialKey]
+          const mitNotation = mitNotationField ? String(data[mitNotationField] ?? '').trim() : ''
           const res = await arshinApi.searchMeter({
             serial,
             valid_until: validUntil || undefined,
             serial_key: device.serialKey,
             preferred_mit_notation: preferred || undefined,
+            mit_notation: mitNotation || undefined,
             meter_label: device.label,
           })
           checks.push({
