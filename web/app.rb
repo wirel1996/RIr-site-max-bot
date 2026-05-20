@@ -1487,6 +1487,16 @@ class ContactsWeb < Sinatra::Base
     halt 400, json_error('file required', 400) unless file && file[:tempfile]
 
     result = WaterRegistryService.import_file(file[:tempfile].path, filename: file[:filename])
+    audit!(
+      action: 'water_import',
+      entity_type: 'summer_water',
+      entity_label: file[:filename].to_s,
+      details: {
+        imported: result[:imported_count],
+        skipped: result[:skipped_count],
+        total: result[:total_rows]
+      }
+    )
     json_response(result)
   rescue ArgumentError => e
     halt 400, json_error(e.message, 400)
@@ -1506,6 +1516,16 @@ class ContactsWeb < Sinatra::Base
     end
 
     result = WaterRegistryService.import_disconnections(file[:tempfile].path, filename: filename)
+    audit!(
+      action: 'water_import_disconnections',
+      entity_type: 'summer_water',
+      entity_label: filename,
+      details: {
+        imported: result[:imported_count],
+        skipped: result[:skipped_count],
+        total: result[:total_rows]
+      }
+    )
     json_response(result)
   rescue ArgumentError => e
     halt 400, json_error(e.message, 400)
