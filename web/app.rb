@@ -25,6 +25,7 @@ require_relative '../services/short_link_service'
 require_relative '../services/uute_service'
 require_relative '../services/uute_act_service'
 require_relative '../services/water_registry_service'
+require_relative '../services/registry_objects_service'
 require_relative '../services/water_phoneogram_service'
 require_relative '../services/max_notify_service'
 require_relative '../services/journal_notify_service'
@@ -850,6 +851,32 @@ class ContactsWeb < Sinatra::Base
     halt 404, json_error('not found', 404) unless record
 
     json_response(record)
+  end
+
+  get '/api/registry-objects/:id' do |id|
+    record = RegistryObjectsService.find(id)
+    halt 404, json_error('not found', 404) unless record
+
+    json_response(record)
+  end
+
+  patch '/api/registry-objects/:id' do |id|
+    before_record, record = RegistryObjectsService.update(id, parse_json_body)
+    AuditLogService.record_changes(
+      actor: current_user,
+      action: 'registry_object_update',
+      entity_type: 'registry_object',
+      entity_id: id.to_s,
+      entity_label: contact_label(record),
+      before: before_record || {},
+      after: record || {},
+      fields: %w[name address identifier],
+      ip: request_ip,
+      user_agent: request.user_agent
+    )
+    json_response(record)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
   end
 
   patch '/api/contacts/:id' do |id|

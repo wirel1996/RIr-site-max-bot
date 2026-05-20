@@ -173,7 +173,7 @@ module ContactsService
         total = ContactsDB.count_search_in_category(db, category, q)
         rows = ContactsDB.search_by_category(db, category, q, limit: size, offset: offset)
       end
-      [rows.map { |row| with_registry_object(row) }, total]
+      [rows.map { |row| with_registry_object(row, db: db) }, total]
     end
   end
 

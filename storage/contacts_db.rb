@@ -383,6 +383,30 @@ module ContactsDB
     db.get_first_row('SELECT * FROM registry_objects WHERE id = ?', [id.to_i])
   end
 
+  def find_registry_object_by_identifier(db, identifier)
+    uid = identifier.to_s.strip
+    return nil if uid.empty?
+
+    db.get_first_row('SELECT * FROM registry_objects WHERE lower_ru(COALESCE(identifier, "")) = lower_ru(?) LIMIT 1', [uid])
+  end
+
+  def update_registry_object(db, id, attrs)
+    allowed = %w[name address identifier]
+    values = attrs.each_with_object({}) do |(key, value), memo|
+      k = key.to_s
+      next unless allowed.include?(k)
+
+      v = value.to_s.strip
+      memo[k] = v.empty? ? nil : v
+    end
+    return find_registry_object(db, id) if values.empty?
+
+    values['updated_at'] = Time.now.to_i
+    assignments = values.keys.map { |key| "#{key} = ?" }.join(', ')
+    db.execute("UPDATE registry_objects SET #{assignments} WHERE id = ?", values.values + [id.to_i])
+    find_registry_object(db, id)
+  end
+
   def upsert_registry_object(db, name:, address:, identifier:, source: 'contacts')
     n = name.to_s.strip
     a = address.to_s.strip

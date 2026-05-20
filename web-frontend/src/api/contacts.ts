@@ -3,6 +3,7 @@ import { api } from './client'
 export type Contact = {
   id: number
   category: ContactCategory
+  object_id: number | null
   name: string | null
   connection_point: string | null
   consumer: string | null
@@ -64,6 +65,18 @@ export type ContactUpdatePayload = Partial<
   Pick<Contact, 'name' | 'connection_point' | 'consumer' | 'manager' | 'address' | 'phone' | 'phone_alt' | 'email' | 'postal_address' | 'notes' | 'identifier' | 'metering_presence' | 'disconnected'>
 >
 
+export type RegistryObject = {
+  id: number
+  name: string | null
+  address: string | null
+  identifier: string | null
+  source: string | null
+  created_at: number
+  updated_at: number
+}
+
+export type RegistryObjectUpdatePayload = Partial<Pick<RegistryObject, 'name' | 'address' | 'identifier'>>
+
 export const contactsApi = {
   overview: () => api.get<ContactsOverview>('/contacts/overview'),
   categories: () => api.get<{ categories: ContactCategoryRecord[] }>('/contacts/categories'),
@@ -83,6 +96,9 @@ export const contactsApi = {
   detail: (id: number) => api.get<Contact>(`/contacts/${id}`),
   update: (id: number, data: ContactUpdatePayload) =>
     api.patch<Contact>(`/contacts/${id}`, data),
+  registryObject: (id: number) => api.get<RegistryObject>(`/registry-objects/${id}`),
+  updateRegistryObject: (id: number, data: RegistryObjectUpdatePayload) =>
+    api.patch<RegistryObject>(`/registry-objects/${id}`, data),
   delete: (id: number) => api.delete<{ ok: true; record: Contact }>(`/contacts/${id}`),
   search: (query: string) =>
     api.get<ContactsSearchResponse>(`/contacts/search?q=${encodeURIComponent(query)}`),

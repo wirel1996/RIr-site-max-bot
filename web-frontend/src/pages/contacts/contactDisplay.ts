@@ -47,15 +47,12 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
     case 'gspo':
       return [
         ['connection_point', 'Точка подключения', 'input'],
-        ['name', 'Наименование', 'input'],
-        ['address', 'Адрес', 'input'],
         ['consumer', 'Потребитель', 'input'],
         ['phone', 'Телефон', 'input'],
         ['email', 'Email', 'input'],
         ['postal_address', 'Почтовый адрес', 'input'],
         ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['disconnected', 'Отключено', 'yes_no'],
-        ['identifier', 'Идентификатор', 'input'],
       ]
     case 'phys':
       return [

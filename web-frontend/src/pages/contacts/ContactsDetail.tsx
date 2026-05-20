@@ -59,7 +59,9 @@ export default function ContactsDetail() {
   const queryClient = useQueryClient()
   const backTo = (location.state as { from?: string } | null)?.from ?? '/contacts'
   const [isEditing, setIsEditing] = useState(false)
+  const [isObjectEditing, setIsObjectEditing] = useState(false)
   const [form, setForm] = useState<ContactUpdatePayload>({})
+  const [objectForm, setObjectForm] = useState({ name: '', address: '', identifier: '' })
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['contacts', 'detail', id],
@@ -73,12 +75,29 @@ export default function ContactsDetail() {
     enabled: !!id && data?.category === 'gspo',
   })
 
+  const registryObjectQuery = useQuery({
+    queryKey: ['registry-objects', data?.object_id],
+    queryFn: () => contactsApi.registryObject(Number(data?.object_id)),
+    enabled: data?.category === 'gspo' && !!data.object_id,
+  })
+
   const updateMutation = useMutation({
     mutationFn: (payload: ContactUpdatePayload) => contactsApi.update(Number(id), payload),
     onSuccess: (record) => {
       queryClient.setQueryData(['contacts', 'detail', id], record)
       queryClient.invalidateQueries({ queryKey: ['contacts'] })
       setIsEditing(false)
+    },
+  })
+
+  const updateObjectMutation = useMutation({
+    mutationFn: () => contactsApi.updateRegistryObject(Number(data?.object_id), objectForm),
+    onSuccess: (record) => {
+      queryClient.setQueryData(['registry-objects', data?.object_id], record)
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      queryClient.invalidateQueries({ queryKey: ['contacts', 'detail', id] })
+      queryClient.invalidateQueries({ queryKey: ['contacts', 'metering-links', id] })
+      setIsObjectEditing(false)
     },
   })
 
@@ -108,6 +127,16 @@ export default function ContactsDetail() {
       disconnected: data.disconnected ?? '',
     })
   }, [data])
+
+  useEffect(() => {
+    const object = registryObjectQuery.data
+    if (!object) return
+    setObjectForm({
+      name: object.name ?? '',
+      address: object.address ?? '',
+      identifier: object.identifier ?? '',
+    })
+  }, [registryObjectQuery.data])
 
   if (isLoading) return <div className="text-gray-500">Загрузка...</div>
   if (error || !data) return <div className="text-red-700">Запись не найдена</div>
@@ -159,6 +188,52 @@ export default function ContactsDetail() {
           </div>
         )}
 
+        {data.category === 'gspo' && data.object_id && (
+          <div className="mb-5 rounded border border-blue-100 bg-blue-50 p-4">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-blue-950">Карточка объекта</h2>
+                <p className="text-sm text-blue-800">Название, адрес и UID ГСПО редактируются только здесь.</p>
+              </div>
+              <button type="button" onClick={() => setIsObjectEditing((v) => !v)} className="w-fit rounded border border-blue-200 bg-white px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100">
+                {isObjectEditing ? 'Закрыть' : 'Редактировать объект'}
+              </button>
+            </div>
+            {registryObjectQuery.isLoading && <div className="text-sm text-blue-800">Загрузка объекта...</div>}
+            {registryObjectQuery.error && <div className="text-sm text-red-700">Не удалось загрузить объект</div>}
+            {registryObjectQuery.data && !isObjectEditing && (
+              <dl className="grid gap-2 text-sm sm:grid-cols-[160px_1fr]">
+                <dt className="font-medium text-blue-900">Наименование</dt><dd>{registryObjectQuery.data.name || '—'}</dd>
+                <dt className="font-medium text-blue-900">Адрес</dt><dd>{registryObjectQuery.data.address || '—'}</dd>
+                <dt className="font-medium text-blue-900">UID</dt><dd className="break-all">{registryObjectQuery.data.identifier || '—'}</dd>
+              </dl>
+            )}
+            {registryObjectQuery.data && isObjectEditing && (
+              <form onSubmit={(e) => { e.preventDefault(); updateObjectMutation.mutate() }} className="space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-blue-900">Наименование</span>
+                  <input value={objectForm.name} onChange={(e) => setObjectForm((current) => ({ ...current, name: e.target.value }))} className="w-full rounded border px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-blue-900">Адрес</span>
+                  <input value={objectForm.address} onChange={(e) => setObjectForm((current) => ({ ...current, address: e.target.value }))} className="w-full rounded border px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-blue-900">UID</span>
+                  <input value={objectForm.identifier} onChange={(e) => setObjectForm((current) => ({ ...current, identifier: e.target.value }))} className="w-full rounded border px-3 py-2" />
+                </label>
+                {updateObjectMutation.error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{updateObjectMutation.error.message}</div>}
+                <div className="flex gap-2">
+                  <button type="submit" disabled={updateObjectMutation.isPending} className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+                    {updateObjectMutation.isPending ? 'Сохраняю...' : 'Сохранить объект'}
+                  </button>
+                  <button type="button" onClick={() => { setIsObjectEditing(false); if (registryObjectQuery.data) setObjectForm({ name: registryObjectQuery.data.name ?? '', address: registryObjectQuery.data.address ?? '', identifier: registryObjectQuery.data.identifier ?? '' }) }} className="rounded border bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Отмена</button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
         {isEditing ? (
           <form onSubmit={onSubmit} className="space-y-4">
             {editableFields.map(([key, label, control]) => (
@@ -183,6 +258,7 @@ export default function ContactsDetail() {
               </button>
               <button type="button" onClick={() => { resetForm(); setIsEditing(false) }} className="rounded border bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Отмена</button>
             </div>
+            {updateMutation.error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{updateMutation.error.message}</div>}
           </form>
         ) : (
           <>
