@@ -627,8 +627,8 @@ export default function Journal() {
                     <tr key={`${day.date}-${time}`} data-date={ti === 0 ? day.date : undefined}>
                       <td className={`sticky left-0 z-20 border border-gray-300 text-xs ${ti === 0 ? 'bg-blue-50 font-medium' : 'bg-gray-50'} ${dayDividerClass}`} style={{ height: 36 }}>
                         <div className="flex flex-col px-2 py-0.5 leading-tight">
-                          {ti === 0 && <span className="text-[11px] font-semibold text-blue-700">{day.weekday} {fmtIso(day.date)}</span>}
-                          <span className="text-[10px] text-gray-600">{time}</span>
+                          {ti === 0 && <span className="text-sm font-bold text-blue-700">{day.weekday} {fmtIso(day.date)}</span>}
+                          <span className="text-xs font-semibold text-gray-600">{time}</span>
                         </div>
                       </td>
                       {people.map((person) => {
