@@ -106,6 +106,17 @@ module ContactsDB
     db.execute('ALTER TABLE contacts ADD COLUMN sync_status TEXT') unless columns.include?('sync_status')
     db.execute('ALTER TABLE contacts ADD COLUMN sync_note TEXT') unless columns.include?('sync_note')
     db.execute('CREATE INDEX IF NOT EXISTS idx_contacts_identifier ON contacts(identifier)')
+    db.execute(<<~SQL)
+      CREATE TRIGGER IF NOT EXISTS trg_contacts_identifier_immutable
+      BEFORE UPDATE OF identifier ON contacts
+      FOR EACH ROW
+      WHEN OLD.identifier IS NOT NULL
+           AND trim(OLD.identifier) != ''
+           AND NEW.identifier IS NOT OLD.identifier
+      BEGIN
+        SELECT RAISE(ABORT, 'contacts.identifier is immutable');
+      END;
+    SQL
     seed_contact_categories(db)
   end
 
