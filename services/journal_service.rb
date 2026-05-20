@@ -386,11 +386,17 @@ module JournalService
   end
 
   def search(query, limit: 50)
-    q = query.to_s.strip.downcase
+    q = safe_downcase(query)
     return [] if q.empty?
 
     db_rows = JournalDB.with_db { |db| JournalDB.search(db, q, limit: limit) }
-    return db_rows.map { |r|
+    q_down = q.downcase
+    filtered_rows = db_rows.select do |r|
+      value = safe_downcase(r['value'])
+      person = safe_downcase(r['person'])
+      value.include?(q_down) || person.include?(q_down)
+    end
+    return filtered_rows.first(limit.to_i).map { |r|
       monday = Date.iso8601(r['week_start']) rescue nil
       friday = monday ? monday + 4 : nil
       {
@@ -401,10 +407,17 @@ module JournalService
         person: r['person'],
         value: r['value'].to_s
       }
-    } if db_rows.any?
+    } if filtered_rows.any?
 
     [] # нет данных в БД (например, первый холодный запуск до синка)
   end
+
+  def safe_downcase(value)
+    value.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '').downcase
+  rescue StandardError
+    value.to_s.downcase
+  end
+  private_class_method :safe_downcase
 
   def ensure_db_synced!(force: false)
     now = Time.now.to_i
@@ -421,8 +434,8 @@ module JournalService
     mondays = monday_set.values.sort
     # Синк только по рабочему окну: несколько последних недель + ближайшая вперед.
     # Глубокий архив не перечитываем — он практически не меняется.
-    past_weeks = (ENV['JOURNAL_SYNC_PAST_WEEKS'] || '4').to_i
-    future_weeks = (ENV['JOURNAL_SYNC_FUTURE_WEEKS'] || '1').to_i
+    past_weeks = (ENV['JOURNAL_SYNC_PAST_WEEKS'] || '1').to_i
+    future_weeks = (ENV['JOURNAL_SYNC_FUTURE_WEEKS'] || '4').to_i
     past_weeks = 4 if past_weeks <= 0
     future_weeks = 1 if future_weeks.negative?
     this_monday = Date.today - ((Date.today.wday - 1) % 7)
