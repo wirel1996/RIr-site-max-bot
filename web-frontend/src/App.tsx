@@ -29,6 +29,9 @@ import MeteringDetail from './pages/metering/MeteringDetail'
 import WaterRegistry from './pages/metering/WaterRegistry'
 import WaterRegistryDetail from './pages/metering/WaterRegistryDetail'
 import Profile from './pages/profile/Profile'
+import ObjectsHome from './pages/objects/ObjectsHome'
+import ObjectsList from './pages/objects/ObjectsList'
+import ObjectDetail from './pages/objects/ObjectDetail'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { state } = useAuth()
@@ -114,6 +117,9 @@ export default function App() {
         />
 
         <Route path="contacts" element={<RequireNotWaterPaymentOnly><ContactsHome /></RequireNotWaterPaymentOnly>} />
+        <Route path="objects" element={<RequireNotWaterPaymentOnly><ObjectsHome /></RequireNotWaterPaymentOnly>} />
+        <Route path="objects/:category" element={<RequireNotWaterPaymentOnly><ObjectsList /></RequireNotWaterPaymentOnly>} />
+        <Route path="objects/:category/:id" element={<RequireNotWaterPaymentOnly><ObjectDetail /></RequireNotWaterPaymentOnly>} />
         <Route path="contacts/search" element={<RequireNotWaterPaymentOnly><ContactsSearch /></RequireNotWaterPaymentOnly>} />
         <Route path="contacts/category/:category" element={<RequireNotWaterPaymentOnly><ContactsCategory /></RequireNotWaterPaymentOnly>} />
         <Route path="contacts/:id" element={<RequireNotWaterPaymentOnly><ContactsDetail /></RequireNotWaterPaymentOnly>} />

@@ -46,14 +46,11 @@ export type ArshinMeterSearchRequest = {
 export type ArshinMeterApplyRequest = {
   serial_key: string
   item: ArshinItem
-  save_pdf?: boolean
 }
 
 export type ArshinMeterApplyResponse = {
   record: MeteringRecord
   applicability: boolean
-  yadisk_path: string | null
-  pdf_error: string | null
   serial_mismatch?: {
     serial_key: string
     current: string

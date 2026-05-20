@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { authApi } from '../../api/auth'
 import type { ApiError } from '../../api/client'
+import { authRu as t } from '../../locales/ru/auth'
 
 type LocationState = { from?: string }
 
@@ -41,7 +42,7 @@ export default function Login() {
       navigate(from, { replace: true })
     } catch (err) {
       const apiErr = err as ApiError
-      setError(apiErr?.message || 'Ошибка авторизации')
+      setError(apiErr?.message || t.authError)
     } finally {
       setSubmitting(false)
     }
@@ -54,15 +55,15 @@ export default function Login() {
     setForgotOk(false)
     try {
       await authApi.forgot(forgotValue.trim())
-      setForgotMsg('Письмо с восстановлением пароля отправлено на почту')
+      setForgotMsg(t.forgotSuccess)
       setForgotOk(true)
     } catch (err) {
       const apiErr = err as ApiError
       const raw = (apiErr?.message || '').trim().toLowerCase()
       if (raw === 'not found' || raw === 'user not found') {
-        setForgotMsg('Пользователь с такой почтой не найден')
+        setForgotMsg(t.forgotNotFound)
       } else {
-        setForgotMsg(apiErr?.message || 'Не удалось отправить письмо.')
+        setForgotMsg(apiErr?.message || t.forgotFailed)
       }
     }
   }
@@ -71,18 +72,18 @@ export default function Login() {
     e.preventDefault()
     if (!resetToken || !resetPassword) return
     if (resetPassword !== resetPasswordConfirm) {
-      setResetMsg('Пароли не совпадают.')
+      setResetMsg(t.passwordsMismatch)
       return
     }
     setResetMsg(null)
     try {
       await authApi.resetPassword(resetToken, resetPassword)
-      setResetMsg('Пароль обновлен. Теперь войдите с новым паролем.')
+      setResetMsg(t.passwordChanged)
       setResetPassword('')
       setResetPasswordConfirm('')
     } catch (err) {
       const apiErr = err as ApiError
-      setResetMsg(apiErr?.message || 'Не удалось сменить пароль.')
+      setResetMsg(apiErr?.message || t.passwordChangeFailed)
     }
   }
 
@@ -90,13 +91,13 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="mb-5">
-          <h1 className="text-lg font-semibold">Сервис ОКЭ</h1>
-          <p className="text-sm text-gray-500 mt-1">Вход в систему</p>
+          <h1 className="text-lg font-semibold">{t.serviceTitle}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t.loginSubtitle}</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Логин или email</label>
+            <label className="block text-sm text-gray-700 mb-1">{t.loginOrEmail}</label>
             <input
               type="text"
               value={loginValue}
@@ -108,7 +109,7 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Пароль</label>
+            <label className="block text-sm text-gray-700 mb-1">{t.password}</label>
             <input
               type="password"
               value={passwordValue}
@@ -123,7 +124,7 @@ export default function Login() {
             disabled={submitting || !loginValue.trim() || !passwordValue}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white text-sm font-medium rounded px-3 py-2 transition"
           >
-            {submitting ? 'Вход...' : 'Войти'}
+            {submitting ? t.loginPending : t.loginAction}
           </button>
         </form>
 
@@ -133,7 +134,7 @@ export default function Login() {
             onClick={() => setForgotOpen((v) => !v)}
             className="w-full rounded border px-3 py-2 text-sm"
           >
-            {forgotOpen ? 'Скрыть восстановление пароля' : 'Забыли пароль?'}
+            {forgotOpen ? t.forgotHide : t.forgotPassword}
           </button>
           {forgotOpen && (
             <form onSubmit={onForgot} className="mt-3 space-y-2">
@@ -141,11 +142,11 @@ export default function Login() {
                 type="text"
                 value={forgotValue}
                 onChange={(e) => setForgotValue(e.target.value)}
-                placeholder="Логин или email"
+                placeholder={t.loginOrEmail}
                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               />
               <button type="submit" className="w-full rounded border px-3 py-2 text-sm">
-                Отправить ссылку
+                {t.sendResetLink}
               </button>
               {forgotMsg && <div className={`text-xs ${forgotOk ? 'text-green-600' : 'text-red-600'}`}>{forgotMsg}</div>}
             </form>
@@ -154,23 +155,23 @@ export default function Login() {
 
         {resetToken && (
           <form onSubmit={onReset} className="mt-4 border-t pt-4 space-y-2">
-            <div className="text-sm font-medium">Новый пароль</div>
+            <div className="text-sm font-medium">{t.newPassword}</div>
             <input
               type="password"
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
-              placeholder="Минимум 8 символов, Aa + цифра"
+              placeholder={t.passwordPolicyHint}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
             <input
               type="password"
               value={resetPasswordConfirm}
               onChange={(e) => setResetPasswordConfirm(e.target.value)}
-              placeholder="Подтвердите пароль"
+              placeholder={t.confirmPassword}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
             <button type="submit" className="w-full rounded bg-blue-600 text-white px-3 py-2 text-sm">
-              Сменить пароль
+              {t.changePassword}
             </button>
             {resetMsg && <div className="text-xs text-gray-600">{resetMsg}</div>}
           </form>

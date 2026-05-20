@@ -26,6 +26,7 @@ require_relative '../services/uute_service'
 require_relative '../services/uute_act_service'
 require_relative '../services/water_registry_service'
 require_relative '../services/registry_objects_service'
+require_relative '../services/objects_service'
 require_relative '../services/water_phoneogram_service'
 require_relative '../services/max_notify_service'
 require_relative '../services/journal_notify_service'
@@ -858,6 +859,22 @@ class ContactsWeb < Sinatra::Base
     halt 404, json_error('not found', 404) unless record
 
     json_response(record)
+  end
+
+  get '/api/objects/categories' do
+    json_response(categories: ObjectsService.categories)
+  end
+
+  get '/api/objects/:category' do |cat|
+    query = params[:q].to_s
+    json_response(category: cat, records: ObjectsService.list(cat, query: query))
+  end
+
+  get '/api/objects/:category/:id' do |cat, id|
+    payload = ObjectsService.detail(id)
+    halt 404, json_error('not found', 404) unless payload
+
+    json_response(payload)
   end
 
   patch '/api/registry-objects/:id' do |id|

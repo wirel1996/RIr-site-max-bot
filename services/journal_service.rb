@@ -834,10 +834,18 @@ module JournalService
   def sync_week_to_db!(week_start_iso)
     monday = Date.iso8601(week_start_iso)
     week = read_week_uncached(monday.iso8601)
+    return unless valid_week_payload?(week)
+
     rows = []
-    week[:values].each do |date_iso, by_time|
-      weekday = week[:days].find { |d| d[:date] == date_iso }&.dig(:weekday).to_s
+    values = week[:values].is_a?(Hash) ? week[:values] : {}
+    days = week[:days].is_a?(Array) ? week[:days] : []
+    values.each do |date_iso, by_time|
+      next unless by_time.is_a?(Hash)
+
+      weekday = days.find { |d| d[:date] == date_iso }&.dig(:weekday).to_s
       by_time.each do |time_slot, by_person|
+        next unless by_person.is_a?(Hash)
+
         by_person.each do |person, value|
           rows << {
             date_iso: date_iso,

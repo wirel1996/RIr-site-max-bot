@@ -1,0 +1,10 @@
+{
+  "backup": "C:/max_bot/storage/uute.db.bak-before-relink-20260520_161316",
+  "existing_links_before": 291,
+  "inserted_links": 287,
+  "links_after": 287,
+  "uid_conflicts_count": 0,
+  "uid_conflicts_sample": [],
+  "contacts_with_uid": 446,
+  "uute_with_uid": 446
+}

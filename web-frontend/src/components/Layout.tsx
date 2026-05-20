@@ -4,13 +4,19 @@ import { useAuth } from '../contexts/AuthContext'
 const navItems = [
   { to: '/', label: 'Главная', exact: true },
   { to: '/journal', label: 'Журнал' },
+]
+
+const objectItems = [
+  { to: '/objects', label: 'Объекты' },
+  { to: '/objects/gspo', label: 'ГСПО' },
+  { to: '/objects/phys', label: 'Прочие ФЛ' },
   { to: '/contacts', label: 'Контакты' },
+  { to: '/metering/gspo', label: 'Приборы учета' },
+  { to: '/summer-water', label: 'Вода на лето ГСПО', waterAllowed: true },
 ]
 
 const serviceItems = [
   { to: '/arshin', label: 'АРШИН' },
-  { to: '/metering', label: 'Приборы учета' },
-  { to: '/summer-water', label: 'Вода на лето ГСПО', waterAllowed: true },
   { to: '/billing', label: 'ГВС биллинг', billingOnly: true },
   { to: '/calculations', label: 'Расчеты' },
   { to: '/algorithms', label: 'Алгоритмы' },
@@ -27,14 +33,18 @@ export default function Layout() {
   const containerClass = wide ? 'w-full' : 'max-w-6xl mx-auto'
 
   const visibleNavItems = navItems.filter(() => user?.role !== 'water_payment')
+  const visibleObjectItems = objectItems.filter((item) => !(user?.role === 'water_payment' && item.waterAllowed !== true))
   const visibleServiceItems = serviceItems.filter((item) => {
-    if (user?.role === 'water_payment') return item.waterAllowed === true
+    if (user?.role === 'water_payment') return false
     if (item.adminOnly && user?.role !== 'admin') return false
     if (item.billingOnly && user?.role === 'limited') return false
     return true
   })
 
   const servicesActive = visibleServiceItems.some((item) => (
+    location.pathname === item.to || location.pathname.startsWith(item.to + '/')
+  ))
+  const objectsActive = visibleObjectItems.some((item) => (
     location.pathname === item.to || location.pathname.startsWith(item.to + '/')
   ))
 
@@ -64,6 +74,30 @@ export default function Layout() {
                 {item.label}
               </NavLink>
             ))}
+            {visibleObjectItems.length > 0 && (
+              <div className="group relative">
+                <button
+                  type="button"
+                  className={objectsActive ? 'font-medium text-blue-700' : 'text-gray-600 hover:text-gray-900'}
+                >
+                  Объекты
+                </button>
+                <div className="invisible absolute left-0 top-full z-[60] min-w-56 rounded border bg-white py-1 shadow-lg opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                  {visibleObjectItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      reloadDocument
+                      className={({ isActive }) =>
+                        `block px-3 py-2 text-sm ${isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )}
             {visibleServiceItems.length > 0 && (
               <div className="group relative">
                 <button

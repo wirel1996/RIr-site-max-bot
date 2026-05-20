@@ -1,0 +1,23 @@
+export const authEn = {
+  serviceTitle: 'OKE Service',
+  loginSubtitle: 'Sign in',
+  loginOrEmail: 'Login or email',
+  password: 'Password',
+  loginAction: 'Sign in',
+  loginPending: 'Signing in...',
+  authError: 'Authorization error',
+  forgotPassword: 'Forgot password?',
+  forgotHide: 'Hide password recovery',
+  sendResetLink: 'Send reset link',
+  forgotSuccess: 'Password reset email has been sent',
+  forgotNotFound: 'User with this email was not found',
+  forgotFailed: 'Failed to send email.',
+  newPassword: 'New password',
+  passwordPolicyHint: 'Minimum 8 chars, Aa + digit',
+  confirmPassword: 'Confirm password',
+  changePassword: 'Change password',
+  passwordsMismatch: 'Passwords do not match.',
+  passwordChanged: 'Password updated. Now sign in with the new password.',
+  passwordChangeFailed: 'Failed to change password.',
+} as const
+

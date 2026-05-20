@@ -1,4 +1,4 @@
-import type { MeteringRecord } from '../api/metering'
+﻿import type { MeteringRecord } from '../api/metering'
 
 export type ArshinMeterDevice = {
   serialKey: keyof MeteringRecord
