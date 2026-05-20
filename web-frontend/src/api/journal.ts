@@ -54,6 +54,10 @@ export const journalApi = {
     api.get<{ log?: { created_at: number; actor_name: string; actor_login: string; new_value: string } }>(
       `/journal/cell-audit?date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}&person=${encodeURIComponent(person)}`,
     ),
+  cellAuditHistory: (date: string, time: string, person: string, limit = 20) =>
+    api.get<{ logs: Array<{ created_at: number; actor_name: string; actor_login: string; old_value: string; new_value: string }> }>(
+      `/journal/cell-audit-history?date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}&person=${encodeURIComponent(person)}&limit=${limit}`,
+    ),
   addColumn: (start: string, name: string) =>
     api.post<{ ok: true; sheet: string; person: string; exists: boolean }>('/journal/column', { start, name }),
   deleteColumn: (start: string, name: string) =>

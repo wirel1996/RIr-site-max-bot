@@ -971,6 +971,23 @@ class ContactsWeb < Sinatra::Base
     json_response(log: logs.first)
   end
 
+  get '/api/journal/cell-audit-history' do
+    halt 503, json_error('journal not configured', 503) unless JournalService.enabled?
+
+    date_iso = params[:date].to_s
+    time = params[:time].to_s
+    person = params[:person].to_s
+    halt 400, json_error('date, time, person required', 400) if date_iso.empty? || time.empty? || person.empty?
+
+    limit = params[:limit].to_i
+    limit = 20 if limit <= 0
+    limit = 100 if limit > 100
+
+    entity_id = "#{date_iso}|#{time}|#{person}"
+    logs = AuditLogService.list(limit: limit, entity_type: 'journal', entity_id: entity_id)
+    json_response(logs: logs)
+  end
+
   post '/api/journal/column' do
     halt 503, json_error('journal not configured', 503) unless JournalService.enabled?
 

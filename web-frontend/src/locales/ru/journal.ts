@@ -19,9 +19,9 @@ export const journalRu = {
   header: {
     title: 'Электронный журнал',
     weekPrefix: 'Неделя',
-    loadingSuffix: '— загрузка…',
+    loadingSuffix: '— загрузка...',
     refreshTitle: 'Сейчас загрузить неделю из Google (иначе автообновление)',
-    refreshing: 'Обновляю…',
+    refreshing: 'Обновляю...',
     refresh: 'Обновить',
     menu: 'Меню',
     search: 'Поиск',
@@ -61,5 +61,15 @@ export const journalRu = {
     searching: 'Ищу по журналу...',
     empty: 'Ничего не найдено',
   },
+  auditModal: {
+    title: 'История изменений',
+    close: 'Закрыть',
+    who: 'Кто',
+    when: 'Когда',
+    oldValue: 'Было',
+    newValue: 'Стало',
+    loading: 'Загрузка истории...',
+    empty: 'По этой ячейке пока нет записей аудита.',
+    loadError: 'Не удалось загрузить историю аудита',
+  },
 } as const
-

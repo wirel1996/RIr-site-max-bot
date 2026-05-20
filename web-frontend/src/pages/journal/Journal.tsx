@@ -45,7 +45,6 @@ function JournalCell({
   onSave,
   onAuditClick,
   onAuditHover,
-  auditHint,
 }: {
   value: string
   selected: boolean
@@ -58,7 +57,6 @@ function JournalCell({
   onSave: (v: string) => Promise<void>
   onAuditClick: () => void
   onAuditHover: () => void
-  auditHint?: string
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -191,7 +189,7 @@ function JournalCell({
       </button>
       {showAuditTip && (
         <div className="absolute top-4 right-0 z-30 max-w-[260px] rounded border border-gray-300 bg-white px-2 py-1 text-[10px] leading-tight shadow">
-          {auditHint || t.cell.auditLoading}
+          {t.auditModal.title}
         </div>
       )}
     </div>
@@ -206,7 +204,7 @@ export default function Journal() {
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
   const [lastSelectedCell, setLastSelectedCell] = useState<CellPos | null>(null)
   const [cellColors, setCellColors] = useState<Record<string, string>>({})
-  const [auditHints, setAuditHints] = useState<Record<string, string>>({})
+  const [auditModal, setAuditModal] = useState<{ open: boolean; date: string; time: string; person: string; loading: boolean; error: string; logs: Array<{ created_at: number; actor_name: string; actor_login: string; old_value: string; new_value: string }> }>({ open: false, date: '', time: '', person: '', loading: false, error: '', logs: [] })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -240,7 +238,6 @@ export default function Journal() {
   useEffect(() => {
     setSelectedCells(new Set())
     setLastSelectedCell(null)
-    setAuditHints({})
   }, [activeWeek])
 
   const weekDataQ = useQuery({
@@ -529,21 +526,29 @@ export default function Journal() {
   }, [selectedCells, cellColors, saveCellColors])
 
   const loadAuditHint = async (date: string, time: string, person: string) => {
-    const key = cellKey(date, time, person)
-    if (auditHints[key]) return
+    void date
+    void time
+    void person
+  }
+
+  const openAuditModal = async (date: string, time: string, person: string) => {
+    setAuditModal({ open: true, date, time, person, loading: true, error: '', logs: [] })
     try {
-      const res = await journalApi.cellAudit(date, time, person)
-      if (!res.log) {
-        setAuditHints((prev) => ({ ...prev, [key]: 'Изменений пока нет' }))
-        return
-      }
-      const actor = res.log.actor_name || res.log.actor_login || 'Неизвестно'
-      const dt = new Date(res.log.created_at * 1000).toLocaleString('ru-RU')
-      setAuditHints((prev) => ({ ...prev, [key]: `Последний: ${actor}, ${dt}` }))
-    } catch {
-      setAuditHints((prev) => ({ ...prev, [key]: 'Не удалось загрузить аудит' }))
+      const res = await journalApi.cellAuditHistory(date, time, person, 20)
+      setAuditModal((prev) => ({ ...prev, loading: false, logs: res.logs || [] }))
+    } catch (e) {
+      setAuditModal((prev) => ({ ...prev, loading: false, error: (e as { message?: string })?.message || t.auditModal.loadError }))
     }
   }
+
+  useEffect(() => {
+    if (!auditModal.open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAuditModal((prev) => ({ ...prev, open: false }))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [auditModal.open])
 
   return (
     <div className="flex flex-col relative" style={{ height: 'calc(100vh - 130px)' }}>
@@ -676,16 +681,8 @@ export default function Journal() {
                                 })
                               }}
                               onAuditHover={() => { void loadAuditHint(day.date, time, person) }}
-                              auditHint={auditHints[key]}
                               onAuditClick={async () => {
-                                const res = await journalApi.cellAudit(day.date, time, person)
-                                if (!res.log) {
-                                  window.alert('По этой ячейке пока нет записей аудита.')
-                                  return
-                                }
-                                const actor = res.log.actor_name || res.log.actor_login || 'Неизвестно'
-                                const dt = new Date(res.log.created_at * 1000).toLocaleString('ru-RU')
-                                window.alert(`Последнее изменение:\n${actor}\n${dt}`)
+                                await openAuditModal(day.date, time, person)
                               }}
                             />
                           </td>
@@ -696,6 +693,20 @@ export default function Journal() {
                 }))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {auditModal.open && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAuditModal((prev) => ({ ...prev, open: false }))}>
+          <div className="w-[720px] max-w-[95vw] max-h-[85vh] overflow-auto rounded bg-white border shadow p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">{t.auditModal.title}: {fmtIso(auditModal.date)} {auditModal.time} · {auditModal.person}</h2>
+              <button className="text-xs border rounded px-2 py-1" onClick={() => setAuditModal((prev) => ({ ...prev, open: false }))}>{t.auditModal.close}</button>
+            </div>
+            {auditModal.loading && <div className="text-sm text-gray-600">{t.auditModal.loading}</div>}
+            {!auditModal.loading && !!auditModal.error && <div className="text-sm text-red-600">{auditModal.error}</div>}
+            {!auditModal.loading && !auditModal.error && auditModal.logs.length === 0 && <div className="text-sm text-gray-600">{t.auditModal.empty}</div>}
+            {!auditModal.loading && !auditModal.error && auditModal.logs.length > 0 && <div className="space-y-2">{auditModal.logs.map((log, idx) => <div key={`${log.created_at}-${idx}`} className="rounded border border-gray-200 p-2 text-xs"><div><span className="font-semibold">{t.auditModal.who}:</span> {log.actor_name || log.actor_login || t.alerts.unknownActor}</div><div><span className="font-semibold">{t.auditModal.when}:</span> {new Date(log.created_at * 1000).toLocaleString('ru-RU')}</div><div><span className="font-semibold">{t.auditModal.oldValue}:</span> <span className="whitespace-pre-wrap">{log.old_value || '—'}</span></div><div><span className="font-semibold">{t.auditModal.newValue}:</span> <span className="whitespace-pre-wrap">{log.new_value || '—'}</span></div></div>)}</div>}
           </div>
         </div>
       )}
