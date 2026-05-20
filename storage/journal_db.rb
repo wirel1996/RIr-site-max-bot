@@ -147,11 +147,9 @@ module JournalDB
   def search(db, query, limit:)
     base = query.to_s.strip
     return [] if base.empty?
-    sample_limit = [limit.to_i * 30, 2000].max
     db.execute(
       "SELECT week_start, date_iso, time_slot, person, value FROM journal_cells " \
-      'ORDER BY date_iso DESC, time_slot DESC LIMIT ?',
-      [sample_limit]
+      'ORDER BY date_iso DESC, time_slot DESC'
     )
   end
 
