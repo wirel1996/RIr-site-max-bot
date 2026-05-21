@@ -1,19 +1,93 @@
 ﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import AdmissionActModal from '../../components/AdmissionActModal'
 import ArshinMeterCheckModal, { type ArshinMeterDevice } from '../../components/ArshinMeterCheckModal'
+import MeteringBlockHistory, { collectBlockAuditFields } from '../../components/MeteringBlockHistory'
 import { ARSHIN_METER_DEVICES, hasFailedArshinCheck } from '../../components/arshinMeterDevices'
 import { arshinApi, type ArshinItem } from '../../api/arshin'
 import { meteringApi, type MeteringRecord } from '../../api/metering'
 import { getPreferredMitNotation } from '../../utils/arshinTypePrefs'
 import { meteringRu as t } from '../../locales/ru/metering'
 import RegistryObjectCard from '../../components/RegistryObjectCard'
+import { exploitationPeriodLabel } from '../../utils/meteringDates'
+import {
+  SEAL_CUT_KEYS,
+  buildFlowmeterSealSlots,
+  buildTempSealSlots,
+} from '../../utils/meteringSeals'
 
 const GROUPS: Array<[string, Array<[keyof MeteringRecord, string]>]> = t.detail.groups
 const OBJECT_FIELDS = new Set<keyof MeteringRecord>(['name', 'address', 'identifier'])
+const ACT_MODAL_SECTIONS = new Set(['Акты и допуск', 'Пломбы', 'Показания'])
+
+const CATEGORY_LABELS: Record<string, string> = {
+  gspo: 'ГСПО',
+  phys: 'Прочие ФЛ',
+  legal: 'Прочие ЮЛ',
+  budget: 'Бюджет',
+  iglakovo: 'Иглаково (коттеджи)',
+  embedded: 'Встроенные помещения',
+  bu2: 'БУ-2',
+  uk_tsj: 'УК и ТСЖ',
+}
+
+type DisplayFieldRow = [string, string]
+
+function fieldValue(data: MeteringRecord, key: string): string | null | undefined {
+  if (key.startsWith('extra_seal_flowmeter_')) {
+    return data.extra_seals?.flowmeter[key.replace('extra_seal_flowmeter_', '')] ?? null
+  }
+  if (key.startsWith('extra_seal_temp_')) {
+    return data.extra_seals?.temp_sensor[key.replace('extra_seal_temp_', '')] ?? null
+  }
+  return data[key as keyof MeteringRecord] as string | null | undefined
+}
+
+function buildDisplayFields(
+  title: string,
+  fields: Array<[keyof MeteringRecord, string]>,
+  data: MeteringRecord,
+): DisplayFieldRow[] {
+  if (title !== 'Пломбы') return fields
+
+  const base = fields.filter(([key]) => {
+    if (key.startsWith('seal_flowmeter_') || key.startsWith('seal_temp_sensor_')) return false
+    return true
+  })
+
+  const flowSlots = buildFlowmeterSealSlots(data, Object.keys(data.extra_seals?.flowmeter ?? {}).map(Number))
+  const tempSlots = buildTempSealSlots(data, Object.keys(data.extra_seals?.temp_sensor ?? {}).map(Number))
+
+  const dynamic: DisplayFieldRow[] = []
+  const calcIdx = base.findIndex(([k]) => k === 'seal_calculator')
+  const insertAt = calcIdx >= 0 ? calcIdx + 1 : 0
+
+  flowSlots.forEach((slot) => {
+    if (slot.fromExtra) {
+      dynamic.push([`extra_seal_flowmeter_${slot.index}`, slot.label])
+    } else if (slot.fieldKey) {
+      const existing = fields.find(([k]) => k === slot.fieldKey)
+      if (existing) dynamic.push(existing)
+    }
+  })
+  tempSlots.forEach((slot) => {
+    if (slot.fromExtra) {
+      dynamic.push([`extra_seal_temp_${slot.index}`, slot.label])
+    } else if (slot.fieldKey) {
+      const existing = fields.find(([k]) => k === slot.fieldKey)
+      if (existing) dynamic.push(existing)
+    }
+  })
+
+  const before = base.slice(0, insertAt)
+  const after = base.slice(insertAt)
+  return [...before, ...dynamic, ...after]
+}
 
 export default function MeteringDetail() {
-  const { id } = useParams<{ id: string }>()
+  const { category, id } = useParams<{ category: string; id: string }>()
+  const cat = category ?? 'gspo'
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [selectedContactId, setSelectedContactId] = useState('')
@@ -39,24 +113,34 @@ export default function MeteringDetail() {
     error?: string
   }>>([])
   const [bulkMessage, setBulkMessage] = useState('')
+  const [actModalOpen, setActModalOpen] = useState(false)
+
+  const revertLastActMutation = useMutation({
+    mutationFn: () => meteringApi.revertLastAct(cat, Number(id)),
+    onSuccess: (record) => {
+      queryClient.setQueryData(['metering', cat, 'detail', id], record)
+      queryClient.invalidateQueries({ queryKey: ['metering', cat] })
+      queryClient.invalidateQueries({ queryKey: ['metering', cat, 'block-history'] })
+    },
+  })
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['metering', 'detail', id],
-    queryFn: () => meteringApi.detail(Number(id)),
+    queryKey: ['metering', cat, 'detail', id],
+    queryFn: () => meteringApi.detail(cat, Number(id)),
     enabled: !!id,
   })
 
   const linksQuery = useQuery({
-    queryKey: ['metering', 'links', id],
-    queryFn: () => meteringApi.linksForUute(Number(id)),
+    queryKey: ['metering', cat, 'links', id],
+    queryFn: () => meteringApi.linksForUute(cat, Number(id)),
     enabled: !!id,
   })
 
   const updateMutation = useMutation({
-    mutationFn: (payload: Partial<MeteringRecord>) => meteringApi.update(Number(id), payload),
+    mutationFn: (payload: Partial<MeteringRecord>) => meteringApi.update(cat, Number(id), payload),
     onSuccess: (record) => {
-      queryClient.setQueryData(['metering', 'detail', id], record)
-      queryClient.invalidateQueries({ queryKey: ['metering', 'gspo'] })
+      queryClient.setQueryData(['metering', cat, 'detail', id], record)
+      queryClient.invalidateQueries({ queryKey: ['metering', cat] })
       setEditingGroup(null)
     },
   })
@@ -65,14 +149,14 @@ export default function MeteringDetail() {
     mutationFn: (contactId: number) => meteringApi.createLink(contactId, Number(id)),
     onSuccess: () => {
       setSelectedContactId('')
-      queryClient.invalidateQueries({ queryKey: ['metering', 'links', id] })
+      queryClient.invalidateQueries({ queryKey: ['metering', cat, 'links', id] })
     },
   })
 
   const deleteLinkMutation = useMutation({
     mutationFn: (contactId: number) => meteringApi.deleteLink(contactId, Number(id)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['metering', 'links', id] })
+      queryClient.invalidateQueries({ queryKey: ['metering', cat, 'links', id] })
     },
   })
 
@@ -146,7 +230,7 @@ export default function MeteringDetail() {
       let applied = 0
       for (const row of bulkResults) {
         if (row.count !== 1 || !row.firstItem) continue
-        await meteringApi.applyArshin(Number(id), {
+        await meteringApi.applyArshin(cat, Number(id), {
           serial_key: row.serialKey,
           item: row.firstItem as Record<string, unknown>,
           
@@ -156,8 +240,8 @@ export default function MeteringDetail() {
       return { applied }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['metering', 'detail', id] })
-      await queryClient.invalidateQueries({ queryKey: ['metering', 'gspo'] })
+      await queryClient.invalidateQueries({ queryKey: ['metering', cat, 'detail', id] })
+      await queryClient.invalidateQueries({ queryKey: ['metering', cat] })
       setBulkResults((current) => current.map((row) => (
         row.count === 1 && row.firstItem ? { ...row, applied: true } : row
       )))
@@ -168,15 +252,15 @@ export default function MeteringDetail() {
   const applyOneMutation = useMutation({
     mutationFn: async (row: { serialKey: ArshinMeterDevice['serialKey']; firstItem: ArshinItem }) => {
       if (!id) return
-      await meteringApi.applyArshin(Number(id), {
+      await meteringApi.applyArshin(cat, Number(id), {
         serial_key: row.serialKey,
         item: row.firstItem as Record<string, unknown>,
         
       })
     },
     onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ['metering', 'detail', id] })
-      await queryClient.invalidateQueries({ queryKey: ['metering', 'gspo'] })
+      await queryClient.invalidateQueries({ queryKey: ['metering', cat, 'detail', id] })
+      await queryClient.invalidateQueries({ queryKey: ['metering', cat] })
       setBulkResults((current) => current.map((row) => (
         row.serialKey === variables.serialKey ? { ...row, applied: true } : row
       )))
@@ -219,8 +303,8 @@ export default function MeteringDetail() {
   return (
     <div className="space-y-4">
       <nav className="flex items-center justify-between text-sm">
-        <Link to="/metering/gspo" className="text-blue-600 hover:underline">
-          {t.detail.backList}
+        <Link to={`/metering/${cat}`} className="text-blue-600 hover:underline">
+          ← {CATEGORY_LABELS[cat] || cat}
         </Link>
         <button
           type="button"
@@ -234,22 +318,55 @@ export default function MeteringDetail() {
       <div className={`rounded-lg bg-white p-5 shadow ${hasFailedArshinCheck(data) ? 'ring-2 ring-red-400' : ''}`}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs uppercase text-gray-500">ГСПО</p>
+            <p className="text-xs uppercase text-gray-500">{CATEGORY_LABELS[cat] || cat}</p>
             <h1 className="text-xl font-bold">{data.name || t.detail.noName}</h1>
             <p className="mt-1 text-sm text-gray-600">{data.address}</p>
             {hasFailedArshinCheck(data) && (
               <p className="mt-2 text-sm font-medium text-red-700">{t.detail.arshinWarn}</p>
             )}
           </div>
+          {id && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActModalOpen(true)}
+                className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-100"
+              >
+                {t.detail.enterAct}
+              </button>
+              <a
+                href={meteringApi.admissionActUrl(cat, Number(id))}
+                className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-800 hover:bg-blue-100"
+              >
+                {t.detail.downloadAct}
+              </a>
+              <button
+                type="button"
+                disabled={revertLastActMutation.isPending}
+                onClick={() => {
+                  if (!window.confirm(t.detail.revertLastActConfirm)) return
+                  revertLastActMutation.mutate()
+                }}
+                className="rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {revertLastActMutation.isPending ? t.detail.saving : t.detail.revertLastAct}
+              </button>
+            </div>
+          )}
+          {revertLastActMutation.error && (
+            <p className="mt-2 text-sm text-red-700">
+              {t.detail.revertLastActFailed}: {(revertLastActMutation.error as Error).message}
+            </p>
+          )}
         </div>
       </div>
 
       <RegistryObjectCard
         objectId={data.object_id}
         invalidateKeys={[
-          ['metering', 'detail', id],
-          ['metering', 'gspo'],
-          ['metering', 'links', id],
+          ['metering', cat, 'detail', id],
+          ['metering', cat],
+          ['metering', cat, 'links', id],
         ]}
       />
 
@@ -312,12 +429,34 @@ export default function MeteringDetail() {
         const isGroupEditing = editingGroup === title
         const isDevicesSection = fields.some(([key]) => key === 'calculator_serial')
         const isActsSection = fields.some(([key]) => key === 'commercial_accounting')
+        const isActModalSection = ACT_MODAL_SECTIONS.has(title)
+        const displayFields = buildDisplayFields(title, fields, data)
+        const periodLabel = isActsSection
+          ? (data.exploitation_period
+            ?? exploitationPeriodLabel(
+              data.date_input_uute,
+              data.date_output_uute,
+              t.detail.exploitationUntilNow,
+            ))
+          : null
+        const blockHistoryFields = collectBlockAuditFields(
+          fields.map(([k, l]) => [String(k), l]),
+          displayFields,
+        )
         return (
         <section key={title} className="rounded-lg bg-white p-5 shadow">
           <form onSubmit={(event) => onSubmitGroup(event, title, fields)}>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="font-semibold">{title}</h2>
             <div className="flex items-center gap-2">
+              {!isGroupEditing && id && (
+                <MeteringBlockHistory
+                  category={cat}
+                  recordId={Number(id)}
+                  blockTitle={title}
+                  fields={blockHistoryFields}
+                />
+              )}
               {isGroupEditing ? (
                 <>
                   <button
@@ -338,7 +477,7 @@ export default function MeteringDetail() {
                     {t.detail.cancel}
                   </button>
                 </>
-              ) : (
+              ) : !isActModalSection ? (
                 <button
                   type="button"
                   onClick={() => setEditingGroup(title)}
@@ -346,7 +485,7 @@ export default function MeteringDetail() {
                 >
                   {t.detail.edit}
                 </button>
-              )}
+              ) : null}
               {isDevicesSection && !isGroupEditing && (
                 <>
                   <button
@@ -366,14 +505,6 @@ export default function MeteringDetail() {
                     {bulkApplyMutation.isPending ? t.detail.saving : t.detail.confirmSave}
                   </button>
                 </>
-              )}
-              {isActsSection && !isGroupEditing && id && (
-                <a
-                  href={meteringApi.admissionActUrl(Number(id))}
-                  className="rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-800 hover:bg-blue-100"
-                >
-                  {t.detail.downloadAct}
-                </a>
               )}
             </div>
           </div>
@@ -435,14 +566,41 @@ export default function MeteringDetail() {
             </div>
           )}
           <dl className="divide-y divide-gray-100">
-            {fields.map(([key, label]) => {
-              const value = data[key]
-              const arshinMeter = ARSHIN_METER_DEVICES.find((device) => device.serialKey === key)
-              const arshinByDate = ARSHIN_METER_DEVICES.find((device) => device.dateKey === key)
+            {displayFields.map(([key, label]) => {
+              const value = fieldValue(data, key)
+              const displayValue = value
+              const recordKey = key as keyof MeteringRecord
+              const arshinMeter = ARSHIN_METER_DEVICES.find((device) => device.serialKey === recordKey)
+              const arshinByDate = ARSHIN_METER_DEVICES.find((device) => device.dateKey === recordKey)
               const arshinCheck = arshinByDate ? data.arshin_checks?.[arshinByDate.serialKey] : undefined
               const arshinMeterCheck = arshinMeter ? data.arshin_checks?.[arshinMeter.serialKey] : undefined
               const showWhenEmpty = key === 'commercial_accounting'
-              if (!isGroupEditing && !showWhenEmpty && !arshinCheck && (value === null || value === undefined || String(value).trim() === '')) return null
+              const alwaysShow = title === 'Пломбы' && SEAL_CUT_KEYS.includes(key as typeof SEAL_CUT_KEYS[number])
+              if (
+                !isGroupEditing
+                && !showWhenEmpty
+                && !alwaysShow
+                && !arshinCheck
+                && (displayValue === null || displayValue === undefined || String(displayValue).trim() === '')
+              ) return null
+              if (isActsSection && key === 'date_input_uute' && periodLabel) {
+                return (
+                  <>
+                    <div key={key} className="py-2 sm:flex sm:gap-4">
+                      <dt className="font-medium text-gray-600 sm:w-64 shrink-0">{label}</dt>
+                      <dd className="mt-1 flex flex-1 flex-col gap-1 sm:mt-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="whitespace-pre-line">{displayValue ? String(displayValue) : '-'}</span>
+                        </div>
+                      </dd>
+                    </div>
+                    <div key="exploitation-between" className="py-2 sm:flex sm:gap-4">
+                      <dt className="font-medium text-gray-600 sm:w-64 shrink-0">{t.detail.exploitationPeriod}</dt>
+                      <dd className="mt-1 text-sm text-gray-700 sm:mt-0">{periodLabel}</dd>
+                    </div>
+                  </>
+                )
+              }
               return (
                 <div
                   key={key}
@@ -451,14 +609,14 @@ export default function MeteringDetail() {
                   <dt className="font-medium text-gray-600 sm:w-64 shrink-0">{label}</dt>
                   <dd className="mt-1 flex flex-1 flex-col gap-1 sm:mt-0">
                     <div className="flex items-start justify-between gap-2">
-                      {isGroupEditing && !OBJECT_FIELDS.has(key) ? (
-                        key === 'nearest_verification_date' ? (
+                      {isGroupEditing && !OBJECT_FIELDS.has(recordKey) ? (
+                        recordKey === 'nearest_verification_date' ? (
                           <span className="whitespace-pre-line">{value ? String(value) : '-'}</span>
                         ) :
-                        key === 'commercial_accounting' ? (
+                        recordKey === 'commercial_accounting' ? (
                           <select
-                            value={form[key] ?? ''}
-                            onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                            value={form[recordKey] ?? ''}
+                            onChange={(event) => setForm((current) => ({ ...current, [recordKey]: event.target.value }))}
                             className="min-w-[170px] rounded border px-2 py-1 text-sm"
                           >
                             <option value="">-</option>
@@ -467,13 +625,13 @@ export default function MeteringDetail() {
                           </select>
                         ) : (
                           <input
-                            value={form[key] ?? ''}
-                            onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                            value={form[recordKey] ?? ''}
+                            onChange={(event) => setForm((current) => ({ ...current, [recordKey]: event.target.value }))}
                             className="w-full rounded border px-2 py-1 text-sm"
                           />
                         )
                       ) : (
-                        <span className="whitespace-pre-line">{value ? String(value) : '-'}</span>
+                        <span className="whitespace-pre-line">{displayValue ? String(displayValue) : '-'}</span>
                       )}
                       {arshinMeter && String(data[arshinMeter.serialKey] ?? '').trim() && (
                         <button
@@ -518,6 +676,16 @@ export default function MeteringDetail() {
           </form>
         </section>
       )})}
+
+      {actModalOpen && id && (
+        <AdmissionActModal
+          open
+          category={cat}
+          recordId={Number(id)}
+          record={data}
+          onClose={() => setActModalOpen(false)}
+        />
+      )}
 
       {arshinDevice && id && (
         <ArshinMeterCheckModal

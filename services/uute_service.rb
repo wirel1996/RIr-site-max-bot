@@ -10,6 +10,10 @@ require_relative 'arshin_pdf_helpers'
 require_relative 'verification_pdf_service'
 require_relative 'arshin_type_priority'
 require_relative '../storage/contacts_db'
+require_relative 'audit_log_service'
+require_relative 'journal_service'
+require_relative 'journal_notify_service'
+require_relative '../storage/user_profiles'
 
 module UuteService
   module_function
@@ -20,10 +24,16 @@ module UuteService
     'calculator_serial' => 'calculator_verification_date',
     'flowmeter_serial_1' => 'flowmeter_verification_date_1',
     'flowmeter_serial_2' => 'flowmeter_verification_date_2',
+    'flowmeter_serial_3' => 'flowmeter_verification_date_3',
+    'flowmeter_serial_4' => 'flowmeter_verification_date_4',
     'temp_sensor_serial_1' => 'temp_sensor_verification_date_1',
     'temp_sensor_serial_2' => 'temp_sensor_verification_date_2',
+    'temp_sensor_serial_3' => 'temp_sensor_verification_date_3',
+    'temp_sensor_serial_4' => 'temp_sensor_verification_date_4',
     'pressure_sensor_serial_1' => 'pressure_sensor_verification_date_1',
-    'pressure_sensor_serial_2' => 'pressure_sensor_verification_date_2'
+    'pressure_sensor_serial_2' => 'pressure_sensor_verification_date_2',
+    'pressure_sensor_serial_3' => 'pressure_sensor_verification_date_3',
+    'pressure_sensor_serial_4' => 'pressure_sensor_verification_date_4'
   }.freeze
 
   XLS_COLUMNS = {
@@ -70,24 +80,42 @@ module UuteService
     'calculator_type' => 73,
     'flowmeter_1' => 74,
     'flowmeter_2' => 75,
+    'flowmeter_3' => 200,
+    'flowmeter_4' => 201,
     'temp_sensor_1' => 76,
     'temp_sensor_2' => 77,
+    'temp_sensor_3' => 202,
+    'temp_sensor_4' => 203,
     'pressure_sensor_1' => 78,
     'pressure_sensor_2' => 79,
+    'pressure_sensor_3' => 204,
+    'pressure_sensor_4' => 205,
     'calculator_serial' => 80,
     'flowmeter_serial_1' => 81,
     'flowmeter_serial_2' => 82,
+    'flowmeter_serial_3' => 206,
+    'flowmeter_serial_4' => 207,
     'temp_sensor_serial_1' => 83,
     'temp_sensor_serial_2' => 84,
+    'temp_sensor_serial_3' => 208,
+    'temp_sensor_serial_4' => 209,
     'pressure_sensor_serial_1' => 85,
     'pressure_sensor_serial_2' => 86,
+    'pressure_sensor_serial_3' => 210,
+    'pressure_sensor_serial_4' => 211,
     'calculator_verification_date' => 87,
     'flowmeter_verification_date_1' => 88,
     'flowmeter_verification_date_2' => 89,
+    'flowmeter_verification_date_3' => 212,
+    'flowmeter_verification_date_4' => 213,
     'temp_sensor_verification_date_1' => 90,
     'temp_sensor_verification_date_2' => 91,
+    'temp_sensor_verification_date_3' => 214,
+    'temp_sensor_verification_date_4' => 215,
     'pressure_sensor_verification_date_1' => 92,
     'pressure_sensor_verification_date_2' => 93,
+    'pressure_sensor_verification_date_3' => 216,
+    'pressure_sensor_verification_date_4' => 217,
     'nearest_verification_date' => 94,
     'seal_calculator' => 98,
     'seal_flowmeter_1' => 99,
@@ -98,6 +126,8 @@ module UuteService
     'seal_cut_2' => 104,
     'seal_cut_3' => 105,
     'seal_cut_4' => 106,
+    'seal_cut_5' => 218,
+    'seal_cut_6' => 219,
     'seals_checked' => 107,
     'system_type' => 110,
     'service_org' => 111,
@@ -163,24 +193,42 @@ module UuteService
     'calculator_type' => ['Тепловычислитель', 1],
     'flowmeter_1' => ['Расходомер', 1],
     'flowmeter_2' => ['Расходомер', 2],
+    'flowmeter_3' => ['Расходомер', 3],
+    'flowmeter_4' => ['Расходомер', 4],
     'temp_sensor_1' => ['Датчик температуры', 1],
     'temp_sensor_2' => ['Датчик температуры', 2],
+    'temp_sensor_3' => ['Датчик температуры', 3],
+    'temp_sensor_4' => ['Датчик температуры', 4],
     'pressure_sensor_1' => ['Датчик давления', 1],
     'pressure_sensor_2' => ['Датчик давления', 2],
+    'pressure_sensor_3' => ['Датчик давления', 3],
+    'pressure_sensor_4' => ['Датчик давления', 4],
     'calculator_serial' => ['Тепловычислитель №', 1],
     'flowmeter_serial_1' => ['Расходомер №', 1],
     'flowmeter_serial_2' => ['Расходомер №', 2],
+    'flowmeter_serial_3' => ['Расходомер №', 3],
+    'flowmeter_serial_4' => ['Расходомер №', 4],
     'temp_sensor_serial_1' => ['Датчик температуры №', 1],
     'temp_sensor_serial_2' => ['Датчик температуры №', 2],
+    'temp_sensor_serial_3' => ['Датчик температуры №', 3],
+    'temp_sensor_serial_4' => ['Датчик температуры №', 4],
     'pressure_sensor_serial_1' => ['Датчик давления №', 1],
     'pressure_sensor_serial_2' => ['Датчик давления №', 2],
+    'pressure_sensor_serial_3' => ['Датчик давления №', 3],
+    'pressure_sensor_serial_4' => ['Датчик давления №', 4],
     'calculator_verification_date' => ['Дата окончания поверки тепловычислителя', 1],
     'flowmeter_verification_date_1' => ['Дата окончания поверки расходомера', 1],
     'flowmeter_verification_date_2' => ['Дата окончания поверки расходомера', 2],
+    'flowmeter_verification_date_3' => ['Дата окончания поверки расходомера', 3],
+    'flowmeter_verification_date_4' => ['Дата окончания поверки расходомера', 4],
     'temp_sensor_verification_date_1' => ['Дата окончания поверки датчика температуры', 1],
     'temp_sensor_verification_date_2' => ['Дата окончания поверки датчика температуры', 2],
+    'temp_sensor_verification_date_3' => ['Дата окончания поверки датчика температуры', 3],
+    'temp_sensor_verification_date_4' => ['Дата окончания поверки датчика температуры', 4],
     'pressure_sensor_verification_date_1' => ['Дата окончания поверки датчика давления', 1],
     'pressure_sensor_verification_date_2' => ['Дата окончания поверки датчика давления', 2],
+    'pressure_sensor_verification_date_3' => ['Дата окончания поверки датчика давления', 3],
+    'pressure_sensor_verification_date_4' => ['Дата окончания поверки датчика давления', 4],
     'nearest_verification_date' => ['Ближайшая дата поверки', 1],
     'seal_calculator' => ['Пломба тепловычислитель №', 1],
     'seal_flowmeter_1' => ['Пломба расходомер №', 1],
@@ -191,6 +239,8 @@ module UuteService
     'seal_cut_2' => ['Пломба врезка №2', 1],
     'seal_cut_3' => ['Пломба врезка №3', 1],
     'seal_cut_4' => ['Пломба врезка №4', 1],
+    'seal_cut_5' => ['Пломба врезка №5', 1],
+    'seal_cut_6' => ['Пломба врезка №6', 1],
     'seals_checked' => ['Пломбы сверены', 1],
     'system_type' => ['тип системы закрытая /открытая', 1],
     'service_org' => ['обслуживающая организация', 1],
@@ -213,13 +263,15 @@ module UuteService
   }.freeze
 
   DATE_COLUMNS = (
-    [40, 41, 42, 47, 50, 57, 58, 59, 60, 61, 62, 87, 88, 89, 90, 91, 92, 93, 94, 95, 97, 112, 124, 125, 130, 132, 137]
+    [40, 41, 42, 47, 50, 57, 58, 59, 60, 61, 62, 87, 88, 89, 90, 91, 92, 93, 94, 95, 97, 112, 124, 125, 130, 132, 137,
+     212, 213, 214, 215, 216, 217]
   ).freeze
   DATE_FIELDS = %w[
     date_input_uute admit_until date_output_uute registration_date violation_fixed_date
     act_date input_date previous_act_date inspection_date calculator_verification_date
-    flowmeter_verification_date_1 flowmeter_verification_date_2 temp_sensor_verification_date_1
-    temp_sensor_verification_date_2 pressure_sensor_verification_date_1 pressure_sensor_verification_date_2
+    flowmeter_verification_date_1 flowmeter_verification_date_2 flowmeter_verification_date_3 flowmeter_verification_date_4
+    temp_sensor_verification_date_1 temp_sensor_verification_date_2 temp_sensor_verification_date_3 temp_sensor_verification_date_4
+    pressure_sensor_verification_date_1 pressure_sensor_verification_date_2 pressure_sensor_verification_date_3 pressure_sensor_verification_date_4
     nearest_verification_date readings_date check_date check_violation_fixed_date
   ].freeze
 
@@ -230,14 +282,41 @@ module UuteService
     false
   end
 
-  def list_gspo(page:, query: nil)
+  def list(category: nil, page:, query: nil)
     offset = page.to_i * PAGE_SIZE
     q = query.to_s.strip
+    cat = category.to_s.strip
     UuteDB.with_db do |db|
-      total = UuteDB.count(db, query: q)
-      records = UuteDB.list(db, limit: PAGE_SIZE, offset: offset, query: q).map { |row| public_row(row) }
-      { category: 'gspo', page: page.to_i, page_size: PAGE_SIZE, total: total, query: q, records: records, last_import: UuteDB.last_import(db) }
+      total = UuteDB.count(db, category: cat, query: q)
+      records = UuteDB.list(db, category: cat, limit: PAGE_SIZE, offset: offset, query: q).map { |row| public_row(row) }
+      { category: cat, page: page.to_i, page_size: PAGE_SIZE, total: total, query: q, records: records, last_import: UuteDB.last_import(db) }
     end
+  end
+
+  def create(category, attrs)
+    object_id = attrs['object_id'].to_s.strip
+    raise ArgumentError, 'object_id обязателен' if object_id.empty?
+
+    object = ContactsDB.with_db { |db| ContactsDB.find_registry_object(db, object_id.to_i) }
+    raise ArgumentError, 'registry_object не найден' unless object
+
+    allowed = editable_fields
+    values = { 'category' => category.to_s, 'object_id' => object_id.to_i }
+    attrs.each do |key, value|
+      k = key.to_s
+      next unless allowed.include?(k)
+      values[k] = value.to_s.strip
+    end
+
+    values['source_key'] = "manual:#{category}:#{object_id}"
+    values['periods_json'] = JSON.generate([])
+    values['raw_json'] = JSON.generate(values)
+
+    computed_nearest = computed_nearest_verification(values)
+    values['nearest_verification_date'] = computed_nearest unless computed_nearest.empty?
+
+    id = UuteDB.with_db { |db| UuteDB.create(db, values) }
+    find(id)
   end
 
   EXPORT_COLUMNS = [
@@ -277,18 +356,36 @@ module UuteService
     ['flowmeter_2', 'Расходомер 2'],
     ['flowmeter_serial_2', 'Расходомер 2 №'],
     ['flowmeter_verification_date_2', 'Дата окончания поверки расходомера 2'],
+    ['flowmeter_3', 'Расходомер 3'],
+    ['flowmeter_serial_3', 'Расходомер 3 №'],
+    ['flowmeter_verification_date_3', 'Дата окончания поверки расходомера 3'],
+    ['flowmeter_4', 'Расходомер 4'],
+    ['flowmeter_serial_4', 'Расходомер 4 №'],
+    ['flowmeter_verification_date_4', 'Дата окончания поверки расходомера 4'],
     ['temp_sensor_1', 'Датчик температуры 1'],
     ['temp_sensor_serial_1', 'Датчик температуры 1 №'],
     ['temp_sensor_verification_date_1', 'Дата окончания поверки датчика температуры 1'],
     ['temp_sensor_2', 'Датчик температуры 2'],
     ['temp_sensor_serial_2', 'Датчик температуры 2 №'],
     ['temp_sensor_verification_date_2', 'Дата окончания поверки датчика температуры 2'],
+    ['temp_sensor_3', 'Датчик температуры 3'],
+    ['temp_sensor_serial_3', 'Датчик температуры 3 №'],
+    ['temp_sensor_verification_date_3', 'Дата окончания поверки датчика температуры 3'],
+    ['temp_sensor_4', 'Датчик температуры 4'],
+    ['temp_sensor_serial_4', 'Датчик температуры 4 №'],
+    ['temp_sensor_verification_date_4', 'Дата окончания поверки датчика температуры 4'],
     ['pressure_sensor_1', 'Датчик давления 1'],
     ['pressure_sensor_serial_1', 'Датчик давления 1 №'],
     ['pressure_sensor_verification_date_1', 'Дата окончания поверки датчика давления 1'],
     ['pressure_sensor_2', 'Датчик давления 2'],
     ['pressure_sensor_serial_2', 'Датчик давления 2 №'],
     ['pressure_sensor_verification_date_2', 'Дата окончания поверки датчика давления 2'],
+    ['pressure_sensor_3', 'Датчик давления 3'],
+    ['pressure_sensor_serial_3', 'Датчик давления 3 №'],
+    ['pressure_sensor_verification_date_3', 'Дата окончания поверки датчика давления 3'],
+    ['pressure_sensor_4', 'Датчик давления 4'],
+    ['pressure_sensor_serial_4', 'Датчик давления 4 №'],
+    ['pressure_sensor_verification_date_4', 'Дата окончания поверки датчика давления 4'],
     ['nearest_verification_date', 'Ближайшая поверка'],
     ['seal_calculator', 'Пломба тепловычислитель №'],
     ['seal_flowmeter_1', 'Пломба расходомер 1 №'],
@@ -299,6 +396,8 @@ module UuteService
     ['seal_cut_2', 'Пломба врезка №2'],
     ['seal_cut_3', 'Пломба врезка №3'],
     ['seal_cut_4', 'Пломба врезка №4'],
+    ['seal_cut_5', 'Пломба врезка №5'],
+    ['seal_cut_6', 'Пломба врезка №6'],
     ['seals_checked', 'Пломбы сверены'],
     ['readings_date', 'Дата показаний'],
     ['reading_q', 'Q'],
@@ -316,9 +415,9 @@ module UuteService
     ['check_note', 'Примечание'],
   ].freeze
 
-  def export_all
+  def export_all(category: nil)
     UuteDB.with_db do |db|
-      records = UuteDB.all_gspo(db)
+      records = category.to_s.empty? ? UuteDB.all_for_category(db, 'gspo') : UuteDB.all_for_category(db, category.to_s)
       records.map { |row| public_row(row) }
     end
   end
@@ -330,6 +429,286 @@ module UuteService
     end
   end
 
+  ACT_SUBMIT_FIELDS = %w[
+    date_input_uute commercial_accounting admit_until date_output_uute output_reason
+    act_primary_number act_periodic_number registration_date violations project
+    seal_calculator seal_flowmeter_1 seal_flowmeter_2 seal_flowmeter_3 seal_flowmeter_4
+    seal_temp_sensor_1 seal_temp_sensor_2 seal_temp_sensor_3 seal_temp_sensor_4
+    seal_cut_1 seal_cut_2 seal_cut_3 seal_cut_4
+    readings_date reading_q reading_m1 reading_v1 reading_m2 reading_v2
+    reading_t1 reading_t2 reading_p1 reading_p2 accepted_by extra_seals_json
+  ].freeze
+
+  SEAL_FLOWMETER_KEYS = (1..4).map { |i| "seal_flowmeter_#{i}" }.freeze
+  SEAL_TEMP_KEYS = (1..4).map { |i| "seal_temp_sensor_#{i}" }.freeze
+  FLOWMETER_SERIAL_KEYS = (1..4).map { |i| "flowmeter_serial_#{i}" }.freeze
+  TEMP_SERIAL_KEYS = (1..4).map { |i| "temp_sensor_serial_#{i}" }.freeze
+
+  def people_list
+    names = {}
+    begin
+      weeks = JournalService.weeks
+      target = weeks.find { |w| w[:contains_today] } || weeks.last
+      week_data = target ? JournalService.read_week(target[:start].to_s) : nil
+      Array(week_data && week_data[:people]).each do |person|
+        key = JournalNotifyService.normalize_person_name(person)
+        names[key] = true unless key.empty?
+      end
+    rescue StandardError
+      # journal optional
+    end
+    UserProfiles.each_user do |_uid, profile|
+      n = JournalNotifyService.normalize_person_name(profile['name'])
+      names[n] = true unless n.empty?
+    end
+    names.keys.sort
+  end
+
+  def field_history(id, field:, limit: 20)
+    safe_limit = [[limit.to_i, 1].max, 100].min
+    AuditLogService.list(
+      limit: safe_limit,
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      field: field.to_s
+    )
+  end
+
+  def revert_last_act(id)
+    existing = UuteDB.with_db { |db| UuteDB.find(db, id) }
+    raise ArgumentError, 'uute not found' unless existing
+
+    logs = AuditLogService.list(
+      limit: AuditLogService::MAX_LIMIT,
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      action: 'metering_act_submit'
+    )
+    raise ArgumentError, 'Нет внесённых актов для отката' if logs.empty?
+
+    last_ts = logs.map { |row| row[:created_at].to_i }.max
+    batch = logs.select { |row| row[:created_at].to_i == last_ts }
+    restore = batch.each_with_object({}) do |row, memo|
+      field = row[:field].to_s
+      next if field.empty?
+
+      memo[field] = row[:old_value].to_s
+    end
+    raise ArgumentError, 'Не удалось определить поля для отката' if restore.empty?
+
+    allowed = (ACT_SUBMIT_FIELDS + %w[periods_json nearest_verification_date]).uniq
+    values = restore.each_with_object({}) do |(key, value), memo|
+      memo[key] = value if allowed.include?(key)
+    end
+
+    UuteDB.with_db do |db|
+      assignments = values.keys.map { |key| "#{key} = ?" }.join(', ')
+      db.execute(
+        "UPDATE uute_objects SET #{assignments}, updated_at = ? WHERE id = ?",
+        values.values + [Time.now.to_i, id.to_i]
+      )
+    end
+    WaterRegistryService.sync_verification_from_uute!(id)
+    {
+      record: find(id),
+      reverted_at: last_ts,
+      fields: values.keys
+    }
+  end
+
+  def block_history(id, fields:, limit: 50)
+    safe_limit = [[limit.to_i, 1].max, 200].min
+    field_set = Array(fields).map(&:to_s).reject(&:empty?).to_h { |f| [f, true] }
+    return [] if field_set.empty?
+
+    logs = AuditLogService.list(
+      limit: safe_limit,
+      entity_type: 'metering',
+      entity_id: id.to_s
+    )
+    logs.select { |row| field_set[row[:field].to_s] }
+  end
+
+  def submit_act(id, payload)
+    existing = UuteDB.with_db { |db| UuteDB.find(db, id) }
+    raise ArgumentError, 'uute not found' unless existing
+
+    body = payload.is_a?(Hash) ? payload.transform_keys(&:to_s) : {}
+    category = existing['category'].to_s
+
+    values = ACT_SUBMIT_FIELDS.each_with_object({}) do |key, memo|
+      next unless body.key?(key)
+
+      memo[key] = body[key].to_s.strip
+    end
+
+    validate_act_submit!(existing, values, body)
+
+    reg_year = act_counter_year(values['registration_date'])
+    if category == 'gspo'
+      values['act_primary_number'] = resolve_act_number(
+        category: category,
+        kind: 'primary',
+        year: reg_year,
+        mode: body['act_primary_mode'].to_s,
+        manual: body['act_primary_number'].to_s,
+        start_from: body['act_primary_start_from']
+      )
+      values['act_periodic_number'] = resolve_act_number(
+        category: category,
+        kind: 'periodic',
+        year: reg_year,
+        mode: body['act_periodic_mode'].to_s,
+        manual: body['act_periodic_number'].to_s,
+        start_from: body['act_periodic_start_from']
+      )
+    end
+
+    extra = parse_extra_seals(body['extra_seals'])
+    values['extra_seals_json'] = JSON.generate(extra) unless extra.empty?
+
+    if !values['date_output_uute'].to_s.strip.empty? && !values['date_input_uute'].to_s.strip.empty?
+      periods = parse_json(existing['periods_json'])
+      periods = [] unless periods.is_a?(Array)
+      periods << {
+        'index' => periods.size + 1,
+        'date1' => values['date_input_uute'],
+        'date2' => values['date_output_uute']
+      }
+      values['periods_json'] = JSON.generate(periods)
+    end
+
+    computed_nearest = computed_nearest_verification(existing.merge(values))
+    values['nearest_verification_date'] = computed_nearest unless computed_nearest.empty?
+
+    UuteDB.with_db do |db|
+      assignments = values.keys.map { |key| "#{key} = ?" }.join(', ')
+      db.execute(
+        "UPDATE uute_objects SET #{assignments}, updated_at = ? WHERE id = ?",
+        values.values + [Time.now.to_i, id.to_i]
+      )
+    end
+    WaterRegistryService.sync_verification_from_uute!(id)
+    find(id)
+  end
+
+  def validate_act_submit!(existing, values, body)
+    errors = []
+    errors << 'Дата ввода УУТЭ обязательна' if values['date_input_uute'].to_s.strip.empty?
+    errors << 'Введен в коммерческий учет обязателен' if values['commercial_accounting'].to_s.strip.empty?
+    errors << 'Пломба вычислителя № обязательна' if values['seal_calculator'].to_s.strip.empty?
+
+    (1..4).each do |i|
+      serial_key = "flowmeter_serial_#{i}"
+      seal_key = "seal_flowmeter_#{i}"
+      next if existing[serial_key].to_s.strip.empty?
+
+      errors << "Пломба расходомера #{i} № обязательна" if values[seal_key].to_s.strip.empty?
+    end
+
+    extra_seals = parse_extra_seals(body['extra_seals'])
+    Array(body['extra_flowmeter_indices']).each do |idx|
+      i = idx.to_i
+      next if i <= 4
+      errors << "Пломба расходомера #{i} № обязательна" if extra_seals.dig('flowmeter', i.to_s).to_s.strip.empty?
+    end
+
+    (1..4).each do |i|
+      serial_key = "temp_sensor_serial_#{i}"
+      seal_key = "seal_temp_sensor_#{i}"
+      next if existing[serial_key].to_s.strip.empty?
+
+      errors << "Пломба термометра #{i} № обязательна" if values[seal_key].to_s.strip.empty?
+    end
+
+    Array(body['extra_temp_indices']).each do |idx|
+      i = idx.to_i
+      next if i <= 4
+      errors << "Пломба термометра #{i} № обязательна" if extra_seals.dig('temp_sensor', i.to_s).to_s.strip.empty?
+    end
+
+    raise ArgumentError, errors.join('; ') unless errors.empty?
+  end
+  private_class_method :validate_act_submit!
+
+  def resolve_act_number(category:, kind:, year:, mode:, manual:, start_from:)
+    mode = mode.to_s.strip
+    case mode
+    when 'manual'
+      manual.to_s.strip
+    when 'start_from'
+      start = start_from.to_i
+      start = 1 if start < 1
+      UuteDB.with_db { |db| UuteDB.set_act_counter(db, category: category, kind: kind, year: year, next_number: start) }
+      allocated = UuteDB.with_db { |db| UuteDB.allocate_act_number(db, category: category, kind: kind, year: year) }
+      bump_counter_from_db_max(db: nil, category: category, kind: kind, year: year, used: allocated)
+      allocated.to_s
+    else
+      UuteDB.with_db do |db|
+        max_in_db = UuteDB.max_act_number_in_category(db, category: category, kind: kind, year: year, field: kind)
+        row = UuteDB.get_act_counter(db, category: category, kind: kind, year: year)
+        counter_next = row ? row['next_number'].to_i : 1
+        number = [counter_next, max_in_db + 1].max
+        UuteDB.set_act_counter(db, category: category, kind: kind, year: year, next_number: number + 1)
+        number.to_s
+      end
+    end
+  end
+  private_class_method :resolve_act_number
+
+  def bump_counter_from_db_max(db:, category:, kind:, year:, used:)
+    UuteDB.with_db do |d|
+      max_in_db = UuteDB.max_act_number_in_category(d, category: category, kind: kind, year: year, field: kind)
+      next_num = [used.to_i, max_in_db].max + 1
+      UuteDB.set_act_counter(d, category: category, kind: kind, year: year, next_number: next_num)
+    end
+  end
+  private_class_method :bump_counter_from_db_max
+
+  def act_counter_year(registration_date)
+    d = parse_ru_date(registration_date)
+    d ? d.year : Date.today.year
+  end
+  private_class_method :act_counter_year
+
+  def parse_extra_seals(value)
+    parsed = value.is_a?(Hash) ? value : parse_json(value.is_a?(String) ? value : nil)
+    return { 'flowmeter' => {}, 'temp_sensor' => {} } unless parsed.is_a?(Hash)
+
+    {
+      'flowmeter' => (parsed['flowmeter'].is_a?(Hash) ? parsed['flowmeter'] : {}).transform_keys(&:to_s),
+      'temp_sensor' => (parsed['temp_sensor'].is_a?(Hash) ? parsed['temp_sensor'] : {}).transform_keys(&:to_s)
+    }
+  end
+  module_function :parse_extra_seals
+
+  def exploitation_period_label(date_input, date_output)
+    start_d = parse_ru_date(date_input)
+    return nil unless start_d
+
+    end_d = parse_ru_date(date_output) || Date.today
+    return nil if end_d < start_d
+
+    days = (end_d - start_d).to_i
+    format_duration_days(days)
+  end
+  module_function :exploitation_period_label
+
+  def format_duration_days(total_days)
+    return '0 дн.' if total_days <= 0
+
+    years = total_days / 365
+    rem = total_days % 365
+    months = rem / 30
+    days = rem % 30
+    parts = []
+    parts << "#{years} г." if years.positive?
+    parts << "#{months} мес." if months.positive?
+    parts << "#{days} дн." if days.positive? || parts.empty?
+    parts.join(' ')
+  end
+  private_class_method :format_duration_days
+
   def update(id, attrs)
     existing = UuteDB.with_db { |db| UuteDB.find(db, id) }
     raise ArgumentError, 'uute not found' unless existing
@@ -337,7 +716,8 @@ module UuteService
     allowed = editable_fields
     forbidden = %w[name address identifier].select { |key| attrs.key?(key) || attrs.key?(key.to_sym) }
     unless forbidden.empty?
-      raise ArgumentError, 'Для ГСПО поля name/address/identifier редактируются только через карточку объекта (registry_object).'
+      cat_label = (existing['category'] || 'ГСПО').to_s
+      raise ArgumentError, "Для #{cat_label} поля name/address/identifier редактируются только через карточку объекта (registry_object)."
     end
     values = attrs.each_with_object({}) do |(key, value), memo|
       k = key.to_s
@@ -684,10 +1064,16 @@ module UuteService
       calculator_verification_date
       flowmeter_verification_date_1
       flowmeter_verification_date_2
+      flowmeter_verification_date_3
+      flowmeter_verification_date_4
       temp_sensor_verification_date_1
       temp_sensor_verification_date_2
+      temp_sensor_verification_date_3
+      temp_sensor_verification_date_4
       pressure_sensor_verification_date_1
       pressure_sensor_verification_date_2
+      pressure_sensor_verification_date_3
+      pressure_sensor_verification_date_4
     ]
     dates = keys.filter_map { |key| parse_ru_date(attrs[key]) }
     dates.min&.strftime('%d.%m.%Y').to_s
@@ -826,10 +1212,18 @@ module UuteService
       end
     end
     result[:periods] = parse_json(row['periods_json'])
+    result[:extra_seals] = parse_extra_seals(row['extra_seals_json'])
     checks = parse_json(row['arshin_checks_json'])
     result[:arshin_checks] = checks.is_a?(Hash) ? checks : {}
+    if detail
+      result[:exploitation_period] = exploitation_period_label(
+        row['date_input_uute'],
+        row['date_output_uute']
+      )
+    end
     result[:raw] = parse_json(row['raw_json']) if detail
     result.delete(:periods_json)
+    result.delete(:extra_seals_json)
     result.delete(:arshin_checks_json)
     result.delete(:raw_json) unless detail
     result

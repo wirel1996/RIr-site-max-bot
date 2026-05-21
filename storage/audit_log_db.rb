@@ -81,7 +81,7 @@ module AuditLogDB
     )
   end
 
-  def list(db, limit:, offset: 0, actor: nil, entity_type: nil, entity_id: nil, exclude_entity_type: nil)
+  def list(db, limit:, offset: 0, actor: nil, entity_type: nil, entity_id: nil, exclude_entity_type: nil, field: nil, action: nil)
     clauses = []
     values = []
     unless actor.to_s.strip.empty?
@@ -95,6 +95,14 @@ module AuditLogDB
     unless entity_id.to_s.strip.empty?
       clauses << 'entity_id = ?'
       values << entity_id.to_s.strip
+    end
+    unless field.to_s.strip.empty?
+      clauses << 'field = ?'
+      values << field.to_s.strip
+    end
+    unless action.to_s.strip.empty?
+      clauses << 'action = ?'
+      values << action.to_s.strip
     end
     unless exclude_entity_type.to_s.strip.empty?
       clauses << 'entity_type <> ?'

@@ -58,7 +58,7 @@ module AuditLogService
     end
   end
 
-  def list(limit: DEFAULT_LIMIT, offset: 0, actor: nil, entity_type: nil, entity_id: nil, exclude_entity_type: nil)
+  def list(limit: DEFAULT_LIMIT, offset: 0, actor: nil, entity_type: nil, entity_id: nil, exclude_entity_type: nil, field: nil, action: nil)
     safe_limit = [[limit.to_i, 1].max, MAX_LIMIT].min
     AuditLogDB.with_db do |db|
       AuditLogDB.list(
@@ -68,7 +68,9 @@ module AuditLogService
         actor: actor,
         entity_type: entity_type,
         entity_id: entity_id,
-        exclude_entity_type: exclude_entity_type
+        exclude_entity_type: exclude_entity_type,
+        field: field,
+        action: action
       ).map { |row| public_row(row) }
     end
   end

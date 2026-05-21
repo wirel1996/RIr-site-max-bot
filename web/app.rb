@@ -202,10 +202,16 @@ class ContactsWeb < Sinatra::Base
         'calculator_serial' => 'Тепловычислитель',
         'flowmeter_serial_1' => 'Расходомер 1',
         'flowmeter_serial_2' => 'Расходомер 2',
+        'flowmeter_serial_3' => 'Расходомер 3',
+        'flowmeter_serial_4' => 'Расходомер 4',
         'temp_sensor_serial_1' => 'Датчик температуры 1',
         'temp_sensor_serial_2' => 'Датчик температуры 2',
+        'temp_sensor_serial_3' => 'Датчик температуры 3',
+        'temp_sensor_serial_4' => 'Датчик температуры 4',
         'pressure_sensor_serial_1' => 'Датчик давления 1',
-        'pressure_sensor_serial_2' => 'Датчик давления 2'
+        'pressure_sensor_serial_2' => 'Датчик давления 2',
+        'pressure_sensor_serial_3' => 'Датчик давления 3',
+        'pressure_sensor_serial_4' => 'Датчик давления 4'
       }[serial_key.to_s] || serial_key.to_s
     end
 
@@ -1176,158 +1182,7 @@ class ContactsWeb < Sinatra::Base
   end
 
   # ---- Metering devices / UUTE ----
-  get '/api/metering/gspo' do
-    page = [params[:page].to_i, 0].max
-    query = params[:q].to_s.strip
-    json_response(UuteService.list_gspo(page: page, query: query))
-  end
-
-  get '/api/metering/gspo/export' do
-    require_not_water_payment_only!
-    require 'spreadsheet'
-    require 'tempfile'
-    require 'date'
-
-    records = UuteService.export_all
-    halt 404, json_error('Нет объектов для выгрузки', 404) if records.empty?
-
-    Spreadsheet.client_encoding = 'UTF-8'
-    book = Spreadsheet::Workbook.new
-    sheet = book.create_worksheet(name: 'Приборы учета ГСПО')
-
-    columns = UuteService::EXPORT_COLUMNS
-    columns.each_with_index { |(_, label), i| sheet[0, i] = label }
-    sheet.row(0).default_format = Spreadsheet::Format.new(weight: :bold)
-
-    wrap_format = Spreadsheet::Format.new(text_wrap: true)
-
-    columns.each_with_index do |(key, _), col_idx|
-      case key
-      when 'name', 'address'
-        sheet.column(col_idx).width = 40
-        sheet.column(col_idx).default_format = wrap_format
-      when 'nearest_verification_date', 'admit_until', 'date_input_uute', 'date_output_uute',
-           'calculator_verification_date', 'flowmeter_verification_date_1', 'flowmeter_verification_date_2',
-           'temp_sensor_verification_date_1', 'temp_sensor_verification_date_2',
-           'pressure_sensor_verification_date_1', 'pressure_sensor_verification_date_2',
-           'registration_date', 'check_date', 'readings_date'
-        sheet.column(col_idx).width = 12
-      end
-    end
-
-    records.each_with_index do |record, idx|
-      columns.each_with_index do |(key, _), col_idx|
-        val = record[key.to_sym]
-        sheet[idx + 1, col_idx] = (val.nil? || val.to_s.strip.empty?) ? '' : val.to_s.strip
-      end
-    end
-
-    date = Date.today.strftime('%Y%m%d')
-    filename = "Приборы_учета_ГСПО_#{date}.xls"
-    tmpfile = Tempfile.new(['gspo_export', '.xls'])
-    tmpfile.close
-    book.write(tmpfile.path)
-
-    audit!(
-      action: 'metering_export',
-      entity_type: 'metering',
-      entity_label: "Выгрузка ГСПО (#{records.size} объектов)"
-    )
-
-    send_file tmpfile.path, filename: filename, type: 'application/vnd.ms-excel', disposition: 'attachment'
-  end
-
-  get '/api/metering/gspo/:id' do |id|
-    record = UuteService.find(id)
-    halt 404, json_error('not found', 404) unless record
-
-    json_response(record)
-  end
-
-  post '/api/metering/gspo/:id/arshin-apply' do |id|
-    body = parse_json_body
-    item = body['item']
-    halt 400, json_error('item required', 400) unless item.is_a?(Hash)
-
-    serial_key = body['serial_key'].to_s
-    registry_url = item['registry_url'].to_s.strip
-    registry_url = ArshinService.registry_link_for_item(item) if registry_url.empty?
-    before = UuteService.find(id)
-    old_check = arshin_checks_from_record(before)[serial_key]
-    result = UuteService.apply_arshin_meter_check(
-      id,
-      serial_key: serial_key,
-      item: item
-    )
-    after = UuteService.find(id)
-    new_check = arshin_checks_from_record(after)[serial_key]
-    new_check = arshin_item_audit_data(item, registry_url: registry_url) if new_check.nil? || new_check.empty?
-    audit!(
-      action: 'metering_arshin_apply',
-      entity_type: 'metering',
-      entity_id: id.to_s,
-      entity_label: billing_label(after),
-      field: arshin_meter_label(serial_key),
-      old_value: arshin_audit_summary(old_check),
-      new_value: arshin_audit_summary(new_check),
-      details: {
-        serial_key: serial_key,
-        mi_number: item['mi_number'],
-        mit_number: item['mit_number'],
-        mit_notation: item['mit_notation'],
-        verification_date: item['verification_date'],
-        valid_date: item['valid_date'],
-        registry_url: registry_url
-      }
-    )
-    json_response(result)
-  rescue ArgumentError => e
-    halt 400, json_error(e.message, 400)
-  end
-
-  patch '/api/metering/gspo/:id' do |id|
-    payload = parse_json_body
-    before = UuteService.find(id)
-    record = UuteService.update(id, payload)
-    changed_fields = payload.keys.map(&:to_s)
-    AuditLogService.record_changes(
-      actor: current_user,
-      action: 'metering_update',
-      entity_type: 'metering',
-      entity_id: id.to_s,
-      entity_label: billing_label(record),
-      before: before || {},
-      after: record || {},
-      fields: changed_fields,
-      ip: request_ip,
-      user_agent: request.user_agent
-    )
-    json_response(record)
-  rescue ArgumentError => e
-    halt 404, json_error(e.message, 404)
-  end
-
-  get '/api/metering/gspo/:id/links' do |id|
-    json_response(UuteService.links_for_uute(id))
-  end
-
-  get '/api/metering/gspo/:id/admission-act' do |id|
-    record = UuteService.find(id)
-    halt 404, json_error('not found', 404) unless record
-
-    path, filename = UuteActService.build(record, user: current_user)
-    audit!(
-      action: 'metering_admission_act_download',
-      entity_type: 'metering',
-      entity_id: id.to_s,
-      entity_label: billing_label(record),
-      details: { filename: filename }
-    )
-    send_file path, filename: filename, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', disposition: 'attachment'
-  rescue ArgumentError => e
-    halt 400, json_error(e.message, 400)
-  end
-
+  # Static routes first (before :category patterns)
   get '/api/contacts/:id/metering-links' do |id|
     json_response(UuteService.links_for_contact(id))
   end
@@ -1375,7 +1230,65 @@ class ContactsWeb < Sinatra::Base
     json_response(ok: true)
   end
 
-  post '/api/metering/gspo/import' do
+  # Category-specific routes (export/import before :category/:id)
+  get '/api/metering/:category/export' do |cat|
+    require_not_water_payment_only!
+    require 'spreadsheet'
+    require 'tempfile'
+    require 'date'
+
+    records = UuteService.export_all(category: cat)
+    halt 404, json_error('Нет объектов для выгрузки', 404) if records.empty?
+
+    label = ContactsDB::CATEGORY_LABELS[cat] || cat
+    Spreadsheet.client_encoding = 'UTF-8'
+    book = Spreadsheet::Workbook.new
+    sheet = book.create_worksheet(name: "Приборы учета #{label}")
+
+    columns = UuteService::EXPORT_COLUMNS
+    columns.each_with_index { |(_, label), i| sheet[0, i] = label }
+    sheet.row(0).default_format = Spreadsheet::Format.new(weight: :bold)
+
+    wrap_format = Spreadsheet::Format.new(text_wrap: true)
+
+    columns.each_with_index do |(key, _), col_idx|
+      case key
+      when 'name', 'address'
+        sheet.column(col_idx).width = 40
+        sheet.column(col_idx).default_format = wrap_format
+      when 'nearest_verification_date', 'admit_until', 'date_input_uute', 'date_output_uute',
+           'calculator_verification_date',
+           'flowmeter_verification_date_1', 'flowmeter_verification_date_2', 'flowmeter_verification_date_3', 'flowmeter_verification_date_4',
+           'temp_sensor_verification_date_1', 'temp_sensor_verification_date_2', 'temp_sensor_verification_date_3', 'temp_sensor_verification_date_4',
+           'pressure_sensor_verification_date_1', 'pressure_sensor_verification_date_2', 'pressure_sensor_verification_date_3', 'pressure_sensor_verification_date_4',
+           'registration_date', 'check_date', 'readings_date'
+        sheet.column(col_idx).width = 12
+      end
+    end
+
+    records.each_with_index do |record, idx|
+      columns.each_with_index do |(key, _), col_idx|
+        val = record[key.to_sym]
+        sheet[idx + 1, col_idx] = (val.nil? || val.to_s.strip.empty?) ? '' : val.to_s.strip
+      end
+    end
+
+    date = Date.today.strftime('%Y%m%d')
+    filename = "Приборы_учета_#{label}_#{date}.xls"
+    tmpfile = Tempfile.new(['metering_export', '.xls'])
+    tmpfile.close
+    book.write(tmpfile.path)
+
+    audit!(
+      action: 'metering_export',
+      entity_type: 'metering',
+      entity_label: "Выгрузка #{label} (#{records.size} объектов)"
+    )
+
+    send_file tmpfile.path, filename: filename, type: 'application/vnd.ms-excel', disposition: 'attachment'
+  end
+
+  post '/api/metering/:category/import' do |cat|
     require_billing_access!
     file = params[:file]
     halt 400, json_error('file required', 400) unless file && file[:tempfile]
@@ -1384,7 +1297,7 @@ class ContactsWeb < Sinatra::Base
     audit!(
       action: 'metering_import',
       entity_type: 'metering',
-      entity_id: '',
+      entity_id: cat,
       entity_label: file[:filename].to_s,
       details: result
     )
@@ -1393,6 +1306,7 @@ class ContactsWeb < Sinatra::Base
     halt 400, json_error(e.message, 400)
   end
 
+  # ---- Water registry (must be before generic :category routes) ----
   get '/api/metering/water' do
     page = [params[:page].to_i, 0].max
     query = params[:q].to_s.strip
@@ -1578,6 +1492,194 @@ class ContactsWeb < Sinatra::Base
       }
     )
     json_response(result)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  # ---- Generic metering (UUTE) routes ----
+  get '/api/metering/people' do
+    json_response(people: UuteService.people_list)
+  end
+
+  # List and create for category
+  get '/api/metering/:category' do |cat|
+    page = [params[:page].to_i, 0].max
+    query = params[:q].to_s.strip
+    json_response(UuteService.list(category: cat, page: page, query: query))
+  end
+
+  post '/api/metering/:category' do |cat|
+    require_not_water_payment_only!
+    body = parse_json_body
+    record = UuteService.create(cat, body)
+    audit!(
+      action: 'metering_create',
+      entity_type: 'metering',
+      entity_id: record[:id].to_s,
+      entity_label: billing_label(record),
+      details: { category: cat, manual: true }
+    )
+    json_response(record, 201)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  # Detail and sub-routes
+  get '/api/metering/:category/:id' do |_cat, id|
+    record = UuteService.find(id)
+    halt 404, json_error('not found', 404) unless record
+
+    json_response(record)
+  end
+
+  patch '/api/metering/:category/:id' do |_cat, id|
+    payload = parse_json_body
+    before = UuteService.find(id)
+    record = UuteService.update(id, payload)
+    changed_fields = payload.keys.map(&:to_s)
+    AuditLogService.record_changes(
+      actor: current_user,
+      action: 'metering_update',
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      entity_label: billing_label(record),
+      before: before || {},
+      after: record || {},
+      fields: changed_fields,
+      ip: request_ip,
+      user_agent: request.user_agent
+    )
+    json_response(record)
+  rescue ArgumentError => e
+    halt 404, json_error(e.message, 404)
+  end
+
+  post '/api/metering/:category/:id/submit-act' do |_cat, id|
+    body = parse_json_body
+    before = UuteService.find(id)
+    halt 404, json_error('not found', 404) unless before
+
+    record = UuteService.submit_act(id, body)
+    changed_fields = UuteService::ACT_SUBMIT_FIELDS.select { |f| body.key?(f) || body.key?(f.to_sym) }
+    changed_fields += %w[act_primary_number act_periodic_number periods_json] if body['act_primary_mode'] || body['act_periodic_mode']
+    AuditLogService.record_changes(
+      actor: current_user,
+      action: 'metering_act_submit',
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      entity_label: billing_label(record),
+      before: before || {},
+      after: record || {},
+      fields: changed_fields.uniq,
+      ip: request_ip,
+      user_agent: request.user_agent
+    )
+    json_response(record)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  get '/api/metering/:category/:id/field-history' do |_cat, id|
+    field = params[:field].to_s.strip
+    halt 400, json_error('field required', 400) if field.empty?
+
+    limit = params[:limit].to_i
+    limit = 20 if limit <= 0
+    logs = UuteService.field_history(id, field: field, limit: limit)
+    json_response(logs: logs)
+  end
+
+  post '/api/metering/:category/:id/revert-last-act' do |_cat, id|
+    before = UuteService.find(id)
+    halt 404, json_error('not found', 404) unless before
+
+    result = UuteService.revert_last_act(id)
+    record = result[:record]
+    AuditLogService.record_changes(
+      actor: current_user,
+      action: 'metering_act_revert',
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      entity_label: billing_label(record),
+      before: before || {},
+      after: record || {},
+      fields: result[:fields],
+      ip: request_ip,
+      user_agent: request.user_agent
+    )
+    json_response(record)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  get '/api/metering/:category/:id/block-history' do |_cat, id|
+    fields = params[:fields].to_s.split(',').map(&:strip).reject(&:empty?)
+    halt 400, json_error('fields required', 400) if fields.empty?
+
+    limit = params[:limit].to_i
+    limit = 50 if limit <= 0
+    logs = UuteService.block_history(id, fields: fields, limit: limit)
+    json_response(logs: logs)
+  end
+
+  post '/api/metering/:category/:id/arshin-apply' do |_cat, id|
+    body = parse_json_body
+    item = body['item']
+    halt 400, json_error('item required', 400) unless item.is_a?(Hash)
+
+    serial_key = body['serial_key'].to_s
+    registry_url = item['registry_url'].to_s.strip
+    registry_url = ArshinService.registry_link_for_item(item) if registry_url.empty?
+    before = UuteService.find(id)
+    old_check = arshin_checks_from_record(before)[serial_key]
+    result = UuteService.apply_arshin_meter_check(
+      id,
+      serial_key: serial_key,
+      item: item
+    )
+    after = UuteService.find(id)
+    new_check = arshin_checks_from_record(after)[serial_key]
+    new_check = arshin_item_audit_data(item, registry_url: registry_url) if new_check.nil? || new_check.empty?
+    audit!(
+      action: 'metering_arshin_apply',
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      entity_label: billing_label(after),
+      field: arshin_meter_label(serial_key),
+      old_value: arshin_audit_summary(old_check),
+      new_value: arshin_audit_summary(new_check),
+      details: {
+        serial_key: serial_key,
+        mi_number: item['mi_number'],
+        mit_number: item['mit_number'],
+        mit_notation: item['mit_notation'],
+        verification_date: item['verification_date'],
+        valid_date: item['valid_date'],
+        registry_url: registry_url
+      }
+    )
+    json_response(result)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  get '/api/metering/:category/:id/links' do |_cat, id|
+    json_response(UuteService.links_for_uute(id))
+  end
+
+  get '/api/metering/:category/:id/admission-act' do |_cat, id|
+    record = UuteService.find(id)
+    halt 404, json_error('not found', 404) unless record
+
+    path, filename = UuteActService.build(record, user: current_user)
+    audit!(
+      action: 'metering_admission_act_download',
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      entity_label: billing_label(record),
+      details: { filename: filename }
+    )
+    send_file path, filename: filename, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', disposition: 'attachment'
   rescue ArgumentError => e
     halt 400, json_error(e.message, 400)
   end

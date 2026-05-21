@@ -172,12 +172,40 @@ module UuteDB
       );
       CREATE INDEX IF NOT EXISTS idx_uute_contact_links_uute ON uute_contact_links(uute_id);
       CREATE INDEX IF NOT EXISTS idx_uute_contact_links_contact ON uute_contact_links(contact_id);
+
+      CREATE TABLE IF NOT EXISTS uute_act_counters (
+        category TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        next_number INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (category, kind, year)
+      );
     SQL
 
     columns = db.execute('PRAGMA table_info(uute_objects)').map { |row| row['name'] }
     db.execute('ALTER TABLE uute_objects ADD COLUMN object_id INTEGER') unless columns.include?('object_id')
     db.execute('CREATE INDEX IF NOT EXISTS idx_uute_object_id ON uute_objects(object_id)')
     {
+      'flowmeter_3' => 'TEXT',
+      'flowmeter_4' => 'TEXT',
+      'flowmeter_serial_3' => 'TEXT',
+      'flowmeter_serial_4' => 'TEXT',
+      'flowmeter_verification_date_3' => 'TEXT',
+      'flowmeter_verification_date_4' => 'TEXT',
+      'temp_sensor_3' => 'TEXT',
+      'temp_sensor_4' => 'TEXT',
+      'temp_sensor_serial_3' => 'TEXT',
+      'temp_sensor_serial_4' => 'TEXT',
+      'temp_sensor_verification_date_3' => 'TEXT',
+      'temp_sensor_verification_date_4' => 'TEXT',
+      'pressure_sensor_3' => 'TEXT',
+      'pressure_sensor_4' => 'TEXT',
+      'pressure_sensor_serial_3' => 'TEXT',
+      'pressure_sensor_serial_4' => 'TEXT',
+      'pressure_sensor_verification_date_3' => 'TEXT',
+      'pressure_sensor_verification_date_4' => 'TEXT',
+      'seal_cut_5' => 'TEXT',
+      'seal_cut_6' => 'TEXT',
       'seal_calculator' => 'TEXT',
       'seal_flowmeter_1' => 'TEXT',
       'seal_flowmeter_2' => 'TEXT',
@@ -196,7 +224,12 @@ module UuteDB
       'pressure_sensor_verification_date_2' => 'TEXT',
       'list_number' => 'TEXT',
       'arshin_checks_json' => 'TEXT',
-      'commercial_accounting' => 'TEXT'
+      'commercial_accounting' => 'TEXT',
+      'extra_seals_json' => 'TEXT',
+      'seal_flowmeter_3' => 'TEXT',
+      'seal_flowmeter_4' => 'TEXT',
+      'seal_temp_sensor_3' => 'TEXT',
+      'seal_temp_sensor_4' => 'TEXT'
     }.each do |name, type|
       db.execute("ALTER TABLE uute_objects ADD COLUMN #{name} #{type}") unless columns.include?(name)
     end
@@ -269,36 +302,50 @@ module UuteDB
     db.get_first_row('SELECT * FROM uute_imports ORDER BY imported_at DESC LIMIT 1')
   end
 
-  def count(db, query: nil)
+  def count(db, category: nil, query: nil)
+    cat_where = category.to_s.empty? ? '' : "category = '#{category}' AND "
     if query.to_s.strip.empty?
-      db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE category = 'gspo'").to_i
+      db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE #{cat_where}1=1").to_i
     else
       q = "%#{query.to_s.downcase}%"
-      db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE category = 'gspo' AND #{search_where}", [q, q, q, q, q, q, q]).to_i
+      db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE #{cat_where}#{search_where}", [q, q, q, q, q, q, q]).to_i
     end
   end
 
-  def list(db, limit:, offset:, query: nil)
+  def list(db, category: nil, limit:, offset:, query: nil)
+    cat_where = category.to_s.empty? ? '' : "category = '#{category}' AND "
     if query.to_s.strip.empty?
       db.execute(
-        "SELECT * FROM uute_objects WHERE category = 'gspo' ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
+        "SELECT * FROM uute_objects WHERE #{cat_where}1=1 ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
         [limit, offset]
       )
     else
       q = "%#{query.to_s.downcase}%"
       db.execute(
-        "SELECT * FROM uute_objects WHERE category = 'gspo' AND #{search_where} ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
+        "SELECT * FROM uute_objects WHERE #{cat_where}#{search_where} ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
         [q, q, q, q, q, q, q, limit, offset]
       )
     end
   end
 
-  def all_gspo(db)
-    db.execute("SELECT * FROM uute_objects WHERE category = 'gspo' ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '')")
+  def all_for_category(db, category)
+    db.execute("SELECT * FROM uute_objects WHERE category = ? ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '')", [category.to_s])
   end
 
   def find(db, id)
     db.get_first_row('SELECT * FROM uute_objects WHERE id = ?', [id.to_i])
+  end
+
+  def create(db, attrs)
+    now = Time.now.to_i
+    values = attrs.merge('imported_at' => now, 'updated_at' => now)
+    keys = values.keys
+    placeholders = (['?'] * keys.size).join(', ')
+    db.execute(
+      "INSERT INTO uute_objects (#{keys.join(', ')}) VALUES (#{placeholders})",
+      values.values
+    )
+    db.last_insert_row_id
   end
 
   def create_or_update_link(db, uute_id:, contact_id:, status:, match_score: nil, match_reason: nil)
@@ -335,6 +382,45 @@ module UuteDB
 
   def delete_link(db, uute_id:, contact_id:)
     db.execute('DELETE FROM uute_contact_links WHERE uute_id = ? AND contact_id = ?', [uute_id.to_i, contact_id.to_i])
+  end
+
+  def get_act_counter(db, category:, kind:, year:)
+    db.get_first_row(
+      'SELECT * FROM uute_act_counters WHERE category = ? AND kind = ? AND year = ?',
+      [category.to_s, kind.to_s, year.to_i]
+    )
+  end
+
+  def set_act_counter(db, category:, kind:, year:, next_number:)
+    db.execute(
+      <<~SQL,
+        INSERT INTO uute_act_counters(category, kind, year, next_number)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(category, kind, year) DO UPDATE SET next_number = excluded.next_number
+      SQL
+      [category.to_s, kind.to_s, year.to_i, next_number.to_i]
+    )
+  end
+
+  def allocate_act_number(db, category:, kind:, year:)
+    row = get_act_counter(db, category: category, kind: kind, year: year)
+    number = row ? row['next_number'].to_i : 1
+    set_act_counter(db, category: category, kind: kind, year: year, next_number: number + 1)
+    number
+  end
+
+  def max_act_number_in_category(db, category:, kind:, year:, field:)
+    col = kind == 'primary' ? 'act_primary_number' : 'act_periodic_number'
+    rows = db.execute(
+      "SELECT #{col} AS num FROM uute_objects WHERE category = ? AND #{col} IS NOT NULL AND TRIM(#{col}) <> ''",
+      [category.to_s]
+    )
+    max_num = 0
+    rows.each do |row|
+      n = row['num'].to_s.strip.to_i
+      max_num = n if n > max_num
+    end
+    max_num
   end
 
   def search_where

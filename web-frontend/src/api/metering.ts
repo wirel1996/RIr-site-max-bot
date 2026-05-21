@@ -17,6 +17,7 @@ export type MeteringRecord = {
   act_periodic_number: string | null
   registration_date: string | null
   violations: string | null
+  project: string | null
   verifier: string | null
   documents: string | null
   commercial_accounting: string | null
@@ -53,12 +54,18 @@ export type MeteringRecord = {
   seal_calculator: string | null
   seal_flowmeter_1: string | null
   seal_flowmeter_2: string | null
+  seal_flowmeter_3: string | null
+  seal_flowmeter_4: string | null
   seal_temp_sensor_1: string | null
   seal_temp_sensor_2: string | null
+  seal_temp_sensor_3: string | null
+  seal_temp_sensor_4: string | null
   seal_cut_1: string | null
   seal_cut_2: string | null
   seal_cut_3: string | null
   seal_cut_4: string | null
+  seal_cut_5: string | null
+  seal_cut_6: string | null
   seals_checked: string | null
   system_type: string | null
   service_org: string | null
@@ -77,6 +84,8 @@ export type MeteringRecord = {
   check_violations: string | null
   check_note: string | null
   periods?: Array<{ index: number; date1: string; date2: string }>
+  extra_seals?: { flowmeter: Record<string, string>; temp_sensor: Record<string, string> }
+  exploitation_period?: string | null
   arshin_checks?: Record<string, {
     valid_date?: string
     verification_date?: string
@@ -91,7 +100,7 @@ export type MeteringRecord = {
 }
 
 export type MeteringListResponse = {
-  category: 'gspo'
+  category: string
   page: number
   page_size: number
   total: number
@@ -105,6 +114,61 @@ export type MeteringListResponse = {
     skipped_count: number
     total_rows: number
   } | null
+}
+
+export type CreateMeteringPayload = {
+  object_id: number
+  calculator_type?: string
+  calculator_serial?: string
+  calculator_verification_date?: string
+  flowmeter_1?: string
+  flowmeter_serial_1?: string
+  flowmeter_verification_date_1?: string
+  flowmeter_2?: string
+  flowmeter_serial_2?: string
+  flowmeter_verification_date_2?: string
+  flowmeter_3?: string
+  flowmeter_serial_3?: string
+  flowmeter_verification_date_3?: string
+  flowmeter_4?: string
+  flowmeter_serial_4?: string
+  flowmeter_verification_date_4?: string
+  temp_sensor_1?: string
+  temp_sensor_serial_1?: string
+  temp_sensor_verification_date_1?: string
+  temp_sensor_2?: string
+  temp_sensor_serial_2?: string
+  temp_sensor_verification_date_2?: string
+  temp_sensor_3?: string
+  temp_sensor_serial_3?: string
+  temp_sensor_verification_date_3?: string
+  temp_sensor_4?: string
+  temp_sensor_serial_4?: string
+  temp_sensor_verification_date_4?: string
+  pressure_sensor_1?: string
+  pressure_sensor_serial_1?: string
+  pressure_sensor_verification_date_1?: string
+  pressure_sensor_2?: string
+  pressure_sensor_serial_2?: string
+  pressure_sensor_verification_date_2?: string
+  pressure_sensor_3?: string
+  pressure_sensor_serial_3?: string
+  pressure_sensor_verification_date_3?: string
+  pressure_sensor_4?: string
+  pressure_sensor_serial_4?: string
+  pressure_sensor_verification_date_4?: string
+  system_type?: string
+  service_org?: string
+  connection_point_number?: string
+  installation_point?: string
+  heat_load?: string
+  hot_water_load?: string
+  ventilation_load?: string
+  contract_flow?: string
+  distance?: string
+  diameter?: string
+  losses_before_uute?: string
+  losses_after_uute?: string
 }
 
 export type MeteringImportResult = {
@@ -232,37 +296,77 @@ export type UuteContactLinks = {
   candidates: MeteringLinkCandidate[]
 }
 
+export type MeteringFieldAuditLog = {
+  created_at: number
+  actor_name: string
+  actor_login: string
+  field: string
+  old_value: string
+  new_value: string
+}
+
+export type SubmitActPayload = Partial<MeteringRecord> & {
+  act_primary_mode?: 'auto' | 'manual' | 'start_from'
+  act_periodic_mode?: 'auto' | 'manual' | 'start_from'
+  act_primary_start_from?: number
+  act_periodic_start_from?: number
+  extra_seals?: { flowmeter: Record<string, string>; temp_sensor: Record<string, string> }
+  extra_flowmeter_indices?: number[]
+  extra_temp_indices?: number[]
+}
+
 export const meteringApi = {
-  listGspo: (page = 0, query = '') => {
+  list: (category: string, page = 0, query = '') => {
     const params = new URLSearchParams({ page: String(page) })
     if (query.trim()) params.set('q', query.trim())
-    return api.get<MeteringListResponse>(`/metering/gspo?${params.toString()}`)
+    return api.get<MeteringListResponse>(`/metering/${category}?${params.toString()}`)
   },
+  listGspo: (page = 0, query = '') => meteringApi.list('gspo', page, query),
+  exportUrl: (category: string) => `/api/metering/${category}/export`,
   gspoExportUrl: () => '/api/metering/gspo/export',
-  detail: (id: number) => api.get<MeteringRecord>(`/metering/gspo/${id}`),
-  admissionActUrl: (id: number) => `/api/metering/gspo/${id}/admission-act`,
-  update: (id: number, payload: Partial<MeteringRecord>) =>
-    api.patch<MeteringRecord>(`/metering/gspo/${id}`, payload),
-  applyArshin: (id: number, payload: { serial_key: string; item: Record<string, unknown> }) =>
+  detail: (category: string, id: number) => api.get<MeteringRecord>(`/metering/${category}/${id}`),
+  gspoDetail: (id: number) => meteringApi.detail('gspo', id),
+  create: (category: string, payload: CreateMeteringPayload) =>
+    api.post<MeteringRecord>(`/metering/${category}`, payload),
+  admissionActUrl: (category: string, id: number) => `/api/metering/${category}/${id}/admission-act`,
+  update: (category: string, id: number, payload: Partial<MeteringRecord>) =>
+    api.patch<MeteringRecord>(`/metering/${category}/${id}`, payload),
+  submitAct: (category: string, id: number, payload: SubmitActPayload) =>
+    api.post<MeteringRecord>(`/metering/${category}/${id}/submit-act`, payload),
+  revertLastAct: (category: string, id: number) =>
+    api.post<MeteringRecord>(`/metering/${category}/${id}/revert-last-act`, {}),
+  fieldHistory: (category: string, id: number, field: string, limit = 20) =>
+    api.get<{ logs: MeteringFieldAuditLog[] }>(
+      `/metering/${category}/${id}/field-history?field=${encodeURIComponent(field)}&limit=${limit}`,
+    ),
+  blockHistory: (category: string, id: number, fields: string[], limit = 50) =>
+    api.get<{ logs: MeteringFieldAuditLog[] }>(
+      `/metering/${category}/${id}/block-history?fields=${fields.map(encodeURIComponent).join(',')}&limit=${limit}`,
+    ),
+  people: () => api.get<{ people: string[] }>('/metering/people'),
+  gspoUpdate: (id: number, payload: Partial<MeteringRecord>) => meteringApi.update('gspo', id, payload),
+  applyArshin: (category: string, id: number, payload: { serial_key: string; item: Record<string, unknown> }) =>
     api.post<{ record: MeteringRecord; applicability: boolean }>(
-      `/metering/gspo/${id}/arshin-apply`,
+      `/metering/${category}/${id}/arshin-apply`,
       payload,
     ),
   linksForContact: (contactId: number) =>
     api.get<ContactMeteringLinks>(`/contacts/${contactId}/metering-links`),
   waterForContact: (contactId: number) =>
     api.get<{ records: WaterRegistryRecord[] }>(`/contacts/${contactId}/water-registry`),
-  linksForUute: (uuteId: number) =>
-    api.get<UuteContactLinks>(`/metering/gspo/${uuteId}/links`),
+  linksForUute: (category: string, uuteId: number) =>
+    api.get<UuteContactLinks>(`/metering/${category}/${uuteId}/links`),
+  gspoLinksForUute: (uuteId: number) => meteringApi.linksForUute('gspo', uuteId),
   createLink: (contactId: number, uuteId: number) =>
     api.post<{ link: MeteringLink }>('/metering/links', { contact_id: contactId, uute_id: uuteId, status: 'manual' }),
   deleteLink: (contactId: number, uuteId: number) =>
     api.deleteData<{ ok: true }>('/metering/links', { contact_id: contactId, uute_id: uuteId }),
-  importGspo: (file: File) => {
+  importMetering: (category: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.upload<MeteringImportResult>('/metering/gspo/import', formData)
+    return api.upload<MeteringImportResult>(`/metering/${category}/import`, formData)
   },
+  importGspo: (file: File) => meteringApi.importMetering('gspo', file),
   listWater: (
     page = 0,
     query = '',
