@@ -163,7 +163,7 @@ module UuteService
     'date_input_uute' => ['Дата ввода УУТЭ', 1],
     'admit_until' => ['допуск до по акту', 1],
     'date_output_uute' => ['Дата вывода УУТЭ', 1],
-    'output_reason' => ['Причина', 1],
+    'output_reason' => ['причина', 2],
     'act_primary_number' => ['Номер акта (первичный/ повторный ввод)', 1],
     'act_periodic_number' => ['Номер акта (периодическая проверка)', 1],
     'act_output_number' => ['Номер акта (вывод из эксплуатации)', 1],
@@ -262,6 +262,54 @@ module UuteService
     'check_note' => ['Примечание', 2]
   }.freeze
 
+  EXCEL_CREATE_META_FIELDS = %w[
+    list_number
+    contract_number
+    name
+    address
+  ].freeze
+
+  EXCEL_ADMISSION_FIELDS = %w[
+    date_input_uute
+    date_output_uute
+    output_reason
+  ].freeze
+
+  EXCEL_SYNC_FIELDS = (
+    EXCEL_ADMISSION_FIELDS + %w[
+    calculator_serial
+    flowmeter_serial_1 flowmeter_serial_2
+    temp_sensor_serial_1 temp_sensor_serial_2
+    pressure_sensor_serial_1 pressure_sensor_serial_2
+    calculator_verification_date
+    flowmeter_verification_date_1 flowmeter_verification_date_2
+    temp_sensor_verification_date_1 temp_sensor_verification_date_2
+    pressure_sensor_verification_date_1 pressure_sensor_verification_date_2
+    seal_calculator
+    seal_flowmeter_1 seal_flowmeter_2
+    seal_temp_sensor_1 seal_temp_sensor_2
+    seal_cut_1 seal_cut_2 seal_cut_3 seal_cut_4
+    readings_date
+    reading_q reading_m1 reading_v1 reading_m2 reading_v2
+    reading_t1 reading_t2 reading_p1 reading_p2
+    accepted_position accepted_by
+    ]
+  ).freeze
+
+  HEADER_ALIASES = {
+    'admit_until' => ['Допуск до'],
+    'output_reason' => ['причина вывода'],
+    'calculator_verification_date' => ['Дата поверки тепловычислителя'],
+    'flowmeter_verification_date_1' => ['Дата поверки расходомера'],
+    'flowmeter_verification_date_2' => ['Дата поверки расходомера'],
+    'temp_sensor_verification_date_1' => ['Дата поверки датчика температуры'],
+    'temp_sensor_verification_date_2' => ['Дата поверки датчика температуры'],
+    'pressure_sensor_verification_date_1' => ['Дата поверки датчика давления'],
+    'pressure_sensor_verification_date_2' => ['Дата поверки датчика давления']
+  }.freeze
+
+  UNSAFE_FALLBACK_COL = 40
+
   DATE_COLUMNS = (
     [40, 41, 42, 47, 50, 57, 58, 59, 60, 61, 62, 87, 88, 89, 90, 91, 92, 93, 94, 95, 97, 112, 124, 125, 130, 132, 137,
      212, 213, 214, 215, 216, 217]
@@ -319,86 +367,41 @@ module UuteService
     find(id)
   end
 
+  # Порядок и подписи столбцов совпадают с legacy Excel (импорт по идентификатору).
   EXPORT_COLUMNS = [
     ['list_number', 'Номер по списку'],
     ['contract_number', 'Номер договора'],
     ['name', 'Наименование'],
     ['address', 'Адрес объекта'],
     ['identifier', 'Идентификатор'],
-    ['input_kind', 'Первичный/повторный'],
     ['date_input_uute', 'Дата ввода УУТЭ'],
-    ['commercial_accounting', 'Введен в коммерческий учет'],
     ['admit_until', 'Допуск до'],
     ['date_output_uute', 'Дата вывода УУТЭ'],
-    ['output_reason', 'Причина вывода'],
-    ['act_primary_number', 'Номер акта ввода'],
-    ['act_periodic_number', 'Номер акта проверки'],
-    ['registration_date', 'Дата регистрации'],
-    ['violations', 'Нарушения'],
-    ['verifier', 'Поверитель'],
-    ['documents', 'Документы'],
-    ['heat_load', 'Нагрузка отопление'],
-    ['hot_water_load', 'Нагрузка ГВС'],
-    ['ventilation_load', 'Нагрузка вентиляция'],
-    ['contract_flow', 'Договорной расход'],
-    ['distance', 'Расстояние'],
-    ['diameter', 'Диаметр'],
-    ['connection_point_number', 'Номер точки присоединения'],
-    ['installation_point', 'Точка установки УУТЭ'],
-    ['system_type', 'Тип системы'],
-    ['service_org', 'Обслуживающая организация'],
-    ['calculator_type', 'Тепловычислитель'],
+    ['output_reason', 'причина вывода'],
+    ['act_number', '№ акта'],
     ['calculator_serial', 'Тепловычислитель №'],
-    ['calculator_verification_date', 'Дата окончания поверки тепловычислителя'],
-    ['flowmeter_1', 'Расходомер 1'],
-    ['flowmeter_serial_1', 'Расходомер 1 №'],
-    ['flowmeter_verification_date_1', 'Дата окончания поверки расходомера 1'],
-    ['flowmeter_2', 'Расходомер 2'],
-    ['flowmeter_serial_2', 'Расходомер 2 №'],
-    ['flowmeter_verification_date_2', 'Дата окончания поверки расходомера 2'],
-    ['flowmeter_3', 'Расходомер 3'],
-    ['flowmeter_serial_3', 'Расходомер 3 №'],
-    ['flowmeter_verification_date_3', 'Дата окончания поверки расходомера 3'],
-    ['flowmeter_4', 'Расходомер 4'],
-    ['flowmeter_serial_4', 'Расходомер 4 №'],
-    ['flowmeter_verification_date_4', 'Дата окончания поверки расходомера 4'],
-    ['temp_sensor_1', 'Датчик температуры 1'],
-    ['temp_sensor_serial_1', 'Датчик температуры 1 №'],
-    ['temp_sensor_verification_date_1', 'Дата окончания поверки датчика температуры 1'],
-    ['temp_sensor_2', 'Датчик температуры 2'],
-    ['temp_sensor_serial_2', 'Датчик температуры 2 №'],
-    ['temp_sensor_verification_date_2', 'Дата окончания поверки датчика температуры 2'],
-    ['temp_sensor_3', 'Датчик температуры 3'],
-    ['temp_sensor_serial_3', 'Датчик температуры 3 №'],
-    ['temp_sensor_verification_date_3', 'Дата окончания поверки датчика температуры 3'],
-    ['temp_sensor_4', 'Датчик температуры 4'],
-    ['temp_sensor_serial_4', 'Датчик температуры 4 №'],
-    ['temp_sensor_verification_date_4', 'Дата окончания поверки датчика температуры 4'],
-    ['pressure_sensor_1', 'Датчик давления 1'],
-    ['pressure_sensor_serial_1', 'Датчик давления 1 №'],
-    ['pressure_sensor_verification_date_1', 'Дата окончания поверки датчика давления 1'],
-    ['pressure_sensor_2', 'Датчик давления 2'],
-    ['pressure_sensor_serial_2', 'Датчик давления 2 №'],
-    ['pressure_sensor_verification_date_2', 'Дата окончания поверки датчика давления 2'],
-    ['pressure_sensor_3', 'Датчик давления 3'],
-    ['pressure_sensor_serial_3', 'Датчик давления 3 №'],
-    ['pressure_sensor_verification_date_3', 'Дата окончания поверки датчика давления 3'],
-    ['pressure_sensor_4', 'Датчик давления 4'],
-    ['pressure_sensor_serial_4', 'Датчик давления 4 №'],
-    ['pressure_sensor_verification_date_4', 'Дата окончания поверки датчика давления 4'],
-    ['nearest_verification_date', 'Ближайшая поверка'],
+    ['flowmeter_serial_1', 'Расходомер №'],
+    ['flowmeter_serial_2', 'Расходомер №'],
+    ['temp_sensor_serial_1', 'Датчик температуры №'],
+    ['temp_sensor_serial_2', 'Датчик температуры №'],
+    ['pressure_sensor_serial_1', 'Датчик давления №'],
+    ['pressure_sensor_serial_2', 'Датчик давления №'],
+    ['calculator_verification_date', 'Дата поверки тепловычислителя'],
+    ['flowmeter_verification_date_1', 'Дата поверки расходомера'],
+    ['flowmeter_verification_date_2', 'Дата поверки расходомера'],
+    ['temp_sensor_verification_date_1', 'Дата поверки датчика температуры'],
+    ['temp_sensor_verification_date_2', 'Дата поверки датчика температуры'],
+    ['pressure_sensor_verification_date_1', 'Дата поверки датчика давления'],
+    ['pressure_sensor_verification_date_2', 'Дата поверки датчика давления'],
     ['seal_calculator', 'Пломба тепловычислитель №'],
-    ['seal_flowmeter_1', 'Пломба расходомер 1 №'],
-    ['seal_flowmeter_2', 'Пломба расходомер 2 №'],
-    ['seal_temp_sensor_1', 'Пломба датчик температуры 1 №'],
-    ['seal_temp_sensor_2', 'Пломба датчик температуры 2 №'],
+    ['seal_flowmeter_1', 'Пломба расходомер №'],
+    ['seal_flowmeter_2', 'Пломба расходомер №'],
+    ['seal_temp_sensor_1', 'Пломба датчик температуры №'],
+    ['seal_temp_sensor_2', 'Пломба датчик температуры №'],
     ['seal_cut_1', 'Пломба врезка №1'],
     ['seal_cut_2', 'Пломба врезка №2'],
     ['seal_cut_3', 'Пломба врезка №3'],
     ['seal_cut_4', 'Пломба врезка №4'],
-    ['seal_cut_5', 'Пломба врезка №5'],
-    ['seal_cut_6', 'Пломба врезка №6'],
-    ['seals_checked', 'Пломбы сверены'],
     ['readings_date', 'Дата показаний'],
     ['reading_q', 'Q'],
     ['reading_m1', 'M1'],
@@ -409,10 +412,8 @@ module UuteService
     ['reading_t2', 't2'],
     ['reading_p1', 'P1'],
     ['reading_p2', 'P2'],
-    ['accepted_by', 'Принимал'],
-    ['check_date', 'Дата проверки'],
-    ['check_violations', 'Нарушения'],
-    ['check_note', 'Примечание'],
+    ['accepted_position', 'должность'],
+    ['accepted_by', 'Принимал']
   ].freeze
 
   def export_all(category: nil)
@@ -422,6 +423,92 @@ module UuteService
     end
   end
 
+  def parse_ru_date_loose(value)
+    text = value.to_s.strip
+    return nil if text.empty?
+
+    if text.match?(/\A\d+(\.\d+)?\z/)
+      num = text.to_f
+      return excel_serial_to_date(num) if num > 20_000
+    end
+
+    parse_ru_date(text)
+  end
+  private_class_method :parse_ru_date_loose
+
+  EXPORT_DATE_FIELDS = %w[
+    date_input_uute admit_until date_output_uute
+    calculator_verification_date
+    flowmeter_verification_date_1 flowmeter_verification_date_2
+    temp_sensor_verification_date_1 temp_sensor_verification_date_2
+    pressure_sensor_verification_date_1 pressure_sensor_verification_date_2
+    readings_date
+  ].freeze
+
+  def export_cell_value(key, val)
+    text = val.nil? ? '' : val.to_s.strip
+    return '' if text.empty?
+
+    if EXPORT_DATE_FIELDS.include?(key.to_s)
+      date = parse_ru_date_loose(text)
+      return date if date
+    end
+
+    if key.to_s == 'list_number'
+      normalized = text.tr(',', '.')
+      return normalized.to_i if normalized.match?(/\A\d+\z/)
+      return normalized.sub(/\.0+\z/, '').to_i if normalized.match?(/\A\d+\.0+\z/)
+      return normalized.to_f if normalized.match?(/\A\d+\.\d+\z/)
+    end
+
+    text
+  end
+
+  def export_today
+    Time.now.getlocal('+07:00').to_date
+  end
+
+  def export_row_highlight(admit_until_value, today: nil)
+    today ||= export_today
+    deadline = parse_ru_date_loose(admit_until_value)
+    return :none unless deadline
+
+    return :red if deadline < today
+    return :yellow if deadline <= (today >> 3)
+
+    :none
+  end
+
+  EXPORT_DATE_NUMBER_FORMAT = 'DD.MM.YYYY'.freeze
+
+  def export_highlight_formats
+    font = Spreadsheet::Font.new('Arial', color: :builtin_black, family: :swiss)
+    date_opts = { number_format: EXPORT_DATE_NUMBER_FORMAT }
+    {
+      red: Spreadsheet::Format.new(
+        {
+          pattern: 1,
+          pattern_fg_color: :builtin_red,
+          pattern_bg_color: :builtin_red,
+          font: font
+        }.merge(date_opts)
+      ),
+      yellow: Spreadsheet::Format.new(
+        {
+          pattern: 1,
+          pattern_fg_color: :builtin_yellow,
+          pattern_bg_color: :builtin_yellow,
+          font: font
+        }.merge(date_opts)
+      ),
+      date: Spreadsheet::Format.new(date_opts)
+    }
+  end
+
+  def export_highlight_format(level)
+    export_highlight_formats[level == :red ? :red : :yellow]
+  end
+
   def find(id)
     UuteDB.with_db do |db|
       row = UuteDB.find(db, id)
@@ -429,15 +516,46 @@ module UuteService
     end
   end
 
-  ACT_SUBMIT_FIELDS = %w[
-    date_input_uute commercial_accounting admit_until date_output_uute output_reason
-    act_primary_number act_periodic_number registration_date violations project
-    seal_calculator seal_flowmeter_1 seal_flowmeter_2 seal_flowmeter_3 seal_flowmeter_4
-    seal_temp_sensor_1 seal_temp_sensor_2 seal_temp_sensor_3 seal_temp_sensor_4
-    seal_cut_1 seal_cut_2 seal_cut_3 seal_cut_4
+  ACT_UNIFIED_COUNTER_KIND = 'act'.freeze
+
+  ACT_READING_FIELDS = %w[
     readings_date reading_q reading_m1 reading_v1 reading_m2 reading_v2
-    reading_t1 reading_t2 reading_p1 reading_p2 accepted_by extra_seals_json
+    reading_t1 reading_t2 reading_p1 reading_p2
   ].freeze
+
+  ACT_INPUT_FIELDS = (
+    %w[
+      date_input_uute registration_date violations project
+      seal_calculator seal_flowmeter_1 seal_flowmeter_2 seal_flowmeter_3 seal_flowmeter_4
+      seal_temp_sensor_1 seal_temp_sensor_2 seal_temp_sensor_3 seal_temp_sensor_4
+      seal_cut_1 seal_cut_2 seal_cut_3 seal_cut_4
+      extra_seals_json
+    ] + ACT_READING_FIELDS
+  ).freeze
+
+  ACT_CHECK_FIELDS = (
+    %w[check_date check_violations check_note] + ACT_READING_FIELDS
+  ).freeze
+
+  ACT_OUTPUT_FIELDS = (
+    %w[date_output_uute output_reason commercial_accounting accepted_by] + ACT_READING_FIELDS
+  ).freeze
+
+  ACT_SUBMIT_FIELDS = (
+    ACT_INPUT_FIELDS + ACT_CHECK_FIELDS + ACT_OUTPUT_FIELDS + %w[admit_until act_number]
+  ).uniq.freeze
+
+  ACT_SUBMIT_AUDIT_ACTIONS = {
+    'input' => 'metering_act_submit_input',
+    'check' => 'metering_act_submit_check',
+    'output' => 'metering_act_submit_output'
+  }.freeze
+
+  ACT_DELETE_AUDIT_ACTIONS = {
+    'input' => 'metering_act_delete_input',
+    'check' => 'metering_act_delete_check',
+    'output' => 'metering_act_delete_output'
+  }.freeze
 
   SEAL_FLOWMETER_KEYS = (1..4).map { |i| "seal_flowmeter_#{i}" }.freeze
   SEAL_TEMP_KEYS = (1..4).map { |i| "seal_temp_sensor_#{i}" }.freeze
@@ -474,33 +592,184 @@ module UuteService
     )
   end
 
-  def revert_last_act(id)
-    existing = UuteDB.with_db { |db| UuteDB.find(db, id) }
-    raise ArgumentError, 'uute not found' unless existing
+  ACT_HISTORY_ACTIONS = (
+    ACT_SUBMIT_AUDIT_ACTIONS.values +
+    ACT_DELETE_AUDIT_ACTIONS.values +
+    %w[metering_act_submit metering_act_delete metering_act_revert]
+  ).freeze
 
+  ACT_KIND_DATE_FIELD = {
+    'input' => 'date_input_uute',
+    'check' => 'check_date',
+    'output' => 'date_output_uute'
+  }.freeze
+
+  ACT_KIND_LABEL = {
+    'input' => 'Акт ввода',
+    'check' => 'Акт проверки',
+    'output' => 'Акт вывода'
+  }.freeze
+
+  def block_history(id, fields:, limit: 50)
+    safe_limit = [[limit.to_i, 1].max, 100].min
+    merged = fields.flat_map { |field| field_history(id, field: field, limit: safe_limit) }
+    merged.sort_by { |row| [-row[:created_at].to_i, -(row[:id] || 0).to_i] }.first(safe_limit)
+  end
+
+  def act_history(id, limit: 50)
+    safe_limit = [[limit.to_i, 1].max, 200].min
+    events = active_act_events(id).first(safe_limit)
+    deletable = %w[input check output].filter_map do |kind|
+      batch = last_revertible_act_batch(id, kind)
+      next unless batch
+
+      act_num_row = batch.find { |row| row[:field].to_s == 'act_number' }
+      num = act_num_row ? act_num_row[:new_value].to_s : ''
+      num = '—' if num.strip.empty?
+      {
+        kind: kind,
+        act_number: num,
+        label: ACT_KIND_LABEL[kind]
+      }
+    end
+    { events: events, deletable: deletable }
+  end
+
+  def active_act_events(id)
     logs = AuditLogService.list(
       limit: AuditLogService::MAX_LIMIT,
       entity_type: 'metering',
-      entity_id: id.to_s,
-      action: 'metering_act_submit'
+      entity_id: id.to_s
     )
-    raise ArgumentError, 'Нет внесённых актов для отката' if logs.empty?
+    act_logs = logs.select { |row| ACT_HISTORY_ACTIONS.include?(row[:action].to_s) }
+    groups = act_logs.group_by { |row| [row[:created_at].to_i, row[:action].to_s] }
+    timeline = groups.filter_map do |(ts, action), batch|
+      kind, event = act_kind_and_event_from_action(action)
+      next unless kind && event
 
-    last_ts = logs.map { |row| row[:created_at].to_i }.max
-    batch = logs.select { |row| row[:created_at].to_i == last_ts }
-    restore = batch.each_with_object({}) do |row, memo|
+      build_act_timeline_event(kind: kind, event: event, ts: ts, batch: batch)
+    end
+    timeline.sort_by! { |row| row[:created_at].to_i }
+    stacks = { 'input' => [], 'check' => [], 'output' => [] }
+    timeline.each do |row|
+      if row[:event] == 'submit'
+        stacks[row[:kind]] << row
+      elsif row[:event] == 'delete'
+        stacks[row[:kind]].pop
+      end
+    end
+    stacks.values.flatten.sort_by { |row| -row[:created_at].to_i }
+  end
+  private_class_method :active_act_events
+
+  def build_act_timeline_event(kind:, event:, ts:, batch:)
+    act_num_row = batch.find { |row| row[:field].to_s == 'act_number' }
+    act_number = if event == 'delete'
+                   act_num_row ? act_num_row[:old_value].to_s : ''
+                 else
+                   act_num_row ? act_num_row[:new_value].to_s : ''
+                 end
+    date_field = ACT_KIND_DATE_FIELD[kind]
+    date_row = batch.find { |row| row[:field].to_s == date_field }
+    act_date = if date_row
+                 event == 'delete' ? date_row[:old_value].to_s : date_row[:new_value].to_s
+               else
+                 ''
+               end
+    head = batch.first || {}
+    changes = batch.filter_map do |row|
       field = row[:field].to_s
       next if field.empty?
 
-      memo[field] = row[:old_value].to_s
+      {
+        field: field,
+        old_value: row[:old_value].to_s,
+        new_value: row[:new_value].to_s
+      }
     end
-    raise ArgumentError, 'Не удалось определить поля для отката' if restore.empty?
+    {
+      kind: kind,
+      event: event,
+      act_number: act_number,
+      act_date: act_date,
+      created_at: ts,
+      actor_name: head[:actor_name].to_s,
+      actor_login: head[:actor_login].to_s,
+      changes: changes
+    }
+  end
+  private_class_method :build_act_timeline_event
 
-    allowed = (ACT_SUBMIT_FIELDS + %w[periods_json nearest_verification_date]).uniq
-    values = restore.each_with_object({}) do |(key, value), memo|
-      memo[key] = value if allowed.include?(key)
+  def act_kind_and_event_from_action(action)
+    action = action.to_s
+    if (m = action.match(/\Ametering_act_(submit|delete)_(input|check|output)\z/))
+      [m[2], m[1]]
+    elsif action == 'metering_act_submit'
+      ['input', 'submit']
+    elsif action == 'metering_act_delete' || action == 'metering_act_revert'
+      ['input', 'delete']
+    else
+      [nil, nil]
     end
+  end
+  private_class_method :act_kind_and_event_from_action
 
+  def normalize_act_kind(value)
+    kind = value.to_s.strip
+    raise ArgumentError, 'act_kind required: input, check or output' unless %w[input check output].include?(kind)
+    kind
+  end
+  module_function :normalize_act_kind
+
+  def metering_act_counter_info(category, year: nil)
+    year = year.to_i
+    year = Date.today.year if year < 2000
+    row = UuteDB.with_db do |db|
+      UuteDB.get_act_counter(db, category: category.to_s, kind: ACT_UNIFIED_COUNTER_KIND, year: year)
+    end
+    {
+      category: category.to_s,
+      year: year,
+      next_number: row ? row['next_number'].to_i : 1
+    }
+  end
+
+  def set_metering_act_counter(category:, year:, next_number:)
+    year = year.to_i
+    year = Date.today.year if year < 2000
+    start = next_number.to_i
+    start = 1 if start < 1
+    UuteDB.with_db do |db|
+      UuteDB.set_act_counter(
+        db,
+        category: category.to_s,
+        kind: ACT_UNIFIED_COUNTER_KIND,
+        year: year,
+        next_number: start
+      )
+    end
+    metering_act_counter_info(category, year: year)
+  end
+
+  def act_submit_audit_action(act_kind)
+    ACT_SUBMIT_AUDIT_ACTIONS.fetch(normalize_act_kind(act_kind))
+  end
+  module_function :act_submit_audit_action
+
+  def act_delete_audit_action(act_kind)
+    ACT_DELETE_AUDIT_ACTIONS.fetch(normalize_act_kind(act_kind))
+  end
+  module_function :act_delete_audit_action
+
+  def refresh_admit_until_value(attrs)
+    out = attrs['date_output_uute'].to_s.strip
+    return out unless out.empty?
+    computed_nearest_verification(attrs)
+  end
+  module_function :refresh_admit_until_value
+
+  def apply_act_values_to_db(id, values)
+    return if values.empty?
     UuteDB.with_db do |db|
       assignments = values.keys.map { |key| "#{key} = ?" }.join(', ')
       db.execute(
@@ -509,127 +778,179 @@ module UuteService
       )
     end
     WaterRegistryService.sync_verification_from_uute!(id)
+  end
+  private_class_method :apply_act_values_to_db
+
+  def act_audit_batch_at(id, act_kind, created_at)
+    action = act_submit_audit_action(act_kind)
+    ts = created_at.to_i
+    logs = AuditLogService.list(
+      limit: AuditLogService::MAX_LIMIT,
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      action: action
+    )
+    batch = logs.select { |row| row[:created_at].to_i == ts }
+    batch.empty? ? nil : batch
+  end
+  private_class_method :act_audit_batch_at
+
+  def last_revertible_act_batch(id, act_kind)
+    kind = normalize_act_kind(act_kind)
+    last_event = active_act_events(id).find { |row| row[:kind] == kind }
+    return nil unless last_event
+
+    act_audit_batch_at(id, kind, last_event[:created_at])
+  end
+  private_class_method :last_revertible_act_batch
+
+  def restore_from_audit_batch(batch)
+    batch.each_with_object({}) do |row, memo|
+      field = row[:field].to_s
+      next if field.empty?
+      memo[field] = row[:old_value].to_s
+    end
+  end
+  private_class_method :restore_from_audit_batch
+
+  def delete_act(id, act_kind:)
+    existing = UuteDB.with_db { |db| UuteDB.find(db, id) }
+    raise ArgumentError, 'uute not found' unless existing
+    kind = normalize_act_kind(act_kind)
+    batch = last_revertible_act_batch(id, kind)
+    label = { 'input' => 'ввода', 'check' => 'проверки', 'output' => 'вывода' }[kind] || kind
+    raise ArgumentError, "Нет акта #{label} для удаления" unless batch
+    restore = restore_from_audit_batch(batch)
+    raise ArgumentError, 'Не удалось определить поля для удаления' if restore.empty?
+    allowed = (ACT_SUBMIT_FIELDS + %w[periods_json nearest_verification_date]).uniq
+    values = restore.each_with_object({}) do |(key, value), memo|
+      memo[key] = value if allowed.include?(key)
+    end
+    apply_act_values_to_db(id, values)
+    row = find(id)
+    merged = row.is_a?(Hash) ? row.transform_keys(&:to_s) : {}
+    admit = refresh_admit_until_value(merged)
+    apply_act_values_to_db(id, { 'admit_until' => admit }) unless admit == merged['admit_until'].to_s
     {
       record: find(id),
-      reverted_at: last_ts,
-      fields: values.keys
+      act_kind: kind,
+      fields: values.keys + ['admit_until']
     }
-  end
-
-  def block_history(id, fields:, limit: 50)
-    safe_limit = [[limit.to_i, 1].max, 200].min
-    field_set = Array(fields).map(&:to_s).reject(&:empty?).to_h { |f| [f, true] }
-    return [] if field_set.empty?
-
-    logs = AuditLogService.list(
-      limit: safe_limit,
-      entity_type: 'metering',
-      entity_id: id.to_s
-    )
-    logs.select { |row| field_set[row[:field].to_s] }
   end
 
   def submit_act(id, payload)
     existing = UuteDB.with_db { |db| UuteDB.find(db, id) }
     raise ArgumentError, 'uute not found' unless existing
-
     body = payload.is_a?(Hash) ? payload.transform_keys(&:to_s) : {}
+    kind = normalize_act_kind(body['act_kind'])
     category = existing['category'].to_s
-
-    values = ACT_SUBMIT_FIELDS.each_with_object({}) do |key, memo|
+    field_keys = case kind
+                 when 'input' then ACT_INPUT_FIELDS
+                 when 'check' then ACT_CHECK_FIELDS
+                 else ACT_OUTPUT_FIELDS
+                 end
+    values = field_keys.each_with_object({}) do |key, memo|
       next unless body.key?(key)
-
       memo[key] = body[key].to_s.strip
     end
-
-    validate_act_submit!(existing, values, body)
-
-    reg_year = act_counter_year(values['registration_date'])
-    if category == 'gspo'
-      values['act_primary_number'] = resolve_act_number(
-        category: category,
-        kind: 'primary',
-        year: reg_year,
-        mode: body['act_primary_mode'].to_s,
-        manual: body['act_primary_number'].to_s,
-        start_from: body['act_primary_start_from']
-      )
-      values['act_periodic_number'] = resolve_act_number(
-        category: category,
-        kind: 'periodic',
-        year: reg_year,
-        mode: body['act_periodic_mode'].to_s,
-        manual: body['act_periodic_number'].to_s,
-        start_from: body['act_periodic_start_from']
-      )
+    case kind
+    when 'input'
+      validate_act_input!(existing, values, body)
+      extra = parse_extra_seals(body['extra_seals'])
+      values['extra_seals_json'] = JSON.generate(extra) unless extra.empty?
+    when 'check'
+      validate_act_check!(values)
+    when 'output'
+      validate_act_output!(values)
+      date_in = existing['date_input_uute'].to_s.strip
+      date_out = values['date_output_uute'].to_s.strip
+      if !date_in.empty? && !date_out.empty?
+        periods = parse_json(existing['periods_json'])
+        periods = [] unless periods.is_a?(Array)
+        periods << { 'index' => periods.size + 1, 'date1' => date_in, 'date2' => date_out }
+        values['periods_json'] = JSON.generate(periods)
+      end
     end
-
-    extra = parse_extra_seals(body['extra_seals'])
-    values['extra_seals_json'] = JSON.generate(extra) unless extra.empty?
-
-    if !values['date_output_uute'].to_s.strip.empty? && !values['date_input_uute'].to_s.strip.empty?
-      periods = parse_json(existing['periods_json'])
-      periods = [] unless periods.is_a?(Array)
-      periods << {
-        'index' => periods.size + 1,
-        'date1' => values['date_input_uute'],
-        'date2' => values['date_output_uute']
-      }
-      values['periods_json'] = JSON.generate(periods)
-    end
-
+    act_date = act_counter_date_for_kind(kind, values)
+    values['act_number'] = allocate_unified_act_number(category: category, date_value: act_date)
     computed_nearest = computed_nearest_verification(existing.merge(values))
     values['nearest_verification_date'] = computed_nearest unless computed_nearest.empty?
-
-    UuteDB.with_db do |db|
-      assignments = values.keys.map { |key| "#{key} = ?" }.join(', ')
-      db.execute(
-        "UPDATE uute_objects SET #{assignments}, updated_at = ? WHERE id = ?",
-        values.values + [Time.now.to_i, id.to_i]
-      )
+    unless kind == 'check'
+      values['admit_until'] = refresh_admit_until_value(existing.merge(values))
     end
-    WaterRegistryService.sync_verification_from_uute!(id)
-    find(id)
+    apply_act_values_to_db(id, values)
+    {
+      record: find(id),
+      act_kind: kind,
+      fields: values.keys
+    }
   end
 
-  def validate_act_submit!(existing, values, body)
+  def validate_act_input!(existing, values, body)
     errors = []
     errors << 'Дата ввода УУТЭ обязательна' if values['date_input_uute'].to_s.strip.empty?
-    errors << 'Введен в коммерческий учет обязателен' if values['commercial_accounting'].to_s.strip.empty?
     errors << 'Пломба вычислителя № обязательна' if values['seal_calculator'].to_s.strip.empty?
-
     (1..4).each do |i|
       serial_key = "flowmeter_serial_#{i}"
       seal_key = "seal_flowmeter_#{i}"
       next if existing[serial_key].to_s.strip.empty?
-
       errors << "Пломба расходомера #{i} № обязательна" if values[seal_key].to_s.strip.empty?
     end
-
     extra_seals = parse_extra_seals(body['extra_seals'])
     Array(body['extra_flowmeter_indices']).each do |idx|
       i = idx.to_i
-      next if i <= 4
+      next if i <= 4 && existing["flowmeter_serial_#{i}"].to_s.strip.empty?
       errors << "Пломба расходомера #{i} № обязательна" if extra_seals.dig('flowmeter', i.to_s).to_s.strip.empty?
     end
-
     (1..4).each do |i|
       serial_key = "temp_sensor_serial_#{i}"
       seal_key = "seal_temp_sensor_#{i}"
       next if existing[serial_key].to_s.strip.empty?
-
       errors << "Пломба термометра #{i} № обязательна" if values[seal_key].to_s.strip.empty?
     end
-
     Array(body['extra_temp_indices']).each do |idx|
       i = idx.to_i
-      next if i <= 4
+      next if i <= 4 && existing["temp_sensor_serial_#{i}"].to_s.strip.empty?
       errors << "Пломба термометра #{i} № обязательна" if extra_seals.dig('temp_sensor', i.to_s).to_s.strip.empty?
     end
-
     raise ArgumentError, errors.join('; ') unless errors.empty?
   end
-  private_class_method :validate_act_submit!
+  private_class_method :validate_act_input!
+
+  def validate_act_output!(values)
+    errors = []
+    errors << 'Дата вывода УУТЭ обязательна' if values['date_output_uute'].to_s.strip.empty?
+    raise ArgumentError, errors.join('; ') unless errors.empty?
+  end
+  private_class_method :validate_act_output!
+
+  def validate_act_check!(values)
+    errors = []
+    errors << 'Дата проверки обязательна' if values['check_date'].to_s.strip.empty?
+    raise ArgumentError, errors.join('; ') unless errors.empty?
+  end
+  private_class_method :validate_act_check!
+
+  def act_counter_date_for_kind(kind, values)
+    key = case kind.to_s
+          when 'input' then 'date_input_uute'
+          when 'check' then 'check_date'
+          else 'date_output_uute'
+          end
+    values[key].to_s
+  end
+  private_class_method :act_counter_date_for_kind
+
+  def allocate_unified_act_number(category:, date_value:)
+    # Единая нумерация внутри года даты акта: ввод → date_input_uute, проверка → check_date, вывод → date_output_uute.
+    # Счётчик в админке задаётся отдельно на каждый год (2026 → 500+, 2027 → с 1 и т.д.).
+    year = act_counter_year(date_value)
+    UuteDB.with_db do |db|
+      number = UuteDB.allocate_act_number(db, category: category, kind: ACT_UNIFIED_COUNTER_KIND, year: year)
+      number.to_s
+    end
+  end
+  private_class_method :allocate_unified_act_number
 
   def resolve_act_number(category:, kind:, year:, mode:, manual:, start_from:)
     mode = mode.to_s.strip
@@ -722,6 +1043,7 @@ module UuteService
     values = attrs.each_with_object({}) do |(key, value), memo|
       k = key.to_s
       next unless allowed.include?(k)
+      next if k == 'admit_until'
 
       memo[k] = value.to_s.strip
     end
@@ -958,10 +1280,37 @@ module UuteService
     }
   end
 
-  def import_file(path, filename: nil)
-    book = Spreadsheet.open(path)
-    sheet = book.worksheets.find { |ws| ws.name.to_s.include?('Гаражи') } || book.worksheets.first
-    raise ArgumentError, 'Лист с данными не найден' unless sheet
+  def compare_identifiers(path, category: 'gspo')
+    sheet = open_data_sheet(path)
+    header_map, warnings = resolved_import_columns(sheet)
+    file_set = {}
+    seen = Hash.new(0)
+
+    (1...sheet.row_count).each do |row_index|
+      identifier = read_identifier(sheet, row_index, header_map)
+      next if identifier.empty?
+
+      seen[identifier] += 1
+      file_set[identifier] = true
+    end
+
+    db_ids = identifiers_in_db(category)
+    db_set = db_ids.to_h { |id| [id, true] }
+
+    {
+      matched_count: file_set.keys.count { |id| db_set[id] },
+      file_count: file_set.size,
+      db_count: db_set.size,
+      in_file_only: file_set.keys.reject { |id| db_set[id] }.sort,
+      in_db_only: db_set.keys.reject { |id| file_set[id] }.sort,
+      duplicates_in_file: seen.select { |_, count| count > 1 }.keys.sort,
+      warnings: warnings
+    }
+  end
+
+  def import_file(path, filename: nil, category: 'gspo')
+    sheet = open_data_sheet(path)
+    header_map, column_warnings = resolved_import_columns(sheet)
 
     added = 0
     updated = 0
@@ -969,50 +1318,82 @@ module UuteService
     skipped = 0
     total = 0
     updated_examples = []
+    added_examples = []
+    warnings = column_warnings.dup
 
     UuteDB.with_db do |db|
       db.execute('BEGIN')
       begin
-        header_map = resolved_columns(sheet)
-        duplicate_identifiers = duplicate_identifiers(sheet, header_map)
-        identifier_seen = Hash.new(0)
         (1...sheet.row_count).each do |row_index|
           total += 1
-          attrs = attrs_from_row(sheet, row_index, header_map)
-          if attrs.nil?
+          identifier_key, identifier_raw = read_identifier_pair(sheet, row_index, header_map)
+          if identifier_key.empty?
             skipped += 1
             next
           end
-          identifier = attrs['identifier'].to_s.strip.downcase
-          unless identifier.empty?
-            identifier_seen[identifier] += 1
-            if duplicate_identifiers.include?(identifier) && identifier_seen[identifier] > 1
-              attrs['source_key'] = fallback_source_key(attrs)
-            end
-          end
 
-          result = UuteDB.upsert_object(db, attrs)
-          case result[:status]
-          when :added
-            added += 1
-          when :updated
-            updated += 1
-            if updated_examples.size < 100
-              updated_examples << {
-                id: result[:id],
-                source_row: attrs['source_row'],
-                name: attrs['name'],
-                address: attrs['address'],
-                identifier: attrs['identifier'],
-                changed_fields: result[:changed_fields],
-                changes: result[:changes]
-              }
+          existing = UuteDB.find_by_identifier(db, identifier_key, category: category)
+          if existing
+            patch = sync_patch_from_row(sheet, row_index, header_map)
+            merged = existing.merge(patch)
+            nearest = computed_nearest_verification(merged)
+            patch['nearest_verification_date'] = nearest unless nearest.empty?
+
+            result = UuteDB.patch_object(db, existing['id'], patch)
+            case result[:status]
+            when :updated
+              updated += 1
+              if updated_examples.size < 100
+                updated_examples << {
+                  id: result[:id],
+                  source_row: row_index + 1,
+                  name: existing['name'],
+                  address: existing['address'],
+                  identifier: existing['identifier'],
+                  changed_fields: result[:changed_fields],
+                  changes: result[:changes]
+                }
+              end
+            else
+              unchanged += 1
             end
           else
-            unchanged += 1
+            attrs = build_create_attrs(
+              sheet,
+              row_index,
+              header_map,
+              category: category,
+              identifier: identifier_raw
+            )
+            name = attrs['name'].to_s.strip
+            address = attrs['address'].to_s.strip
+            if name.empty? && address.empty?
+              skipped += 1
+              warnings << "строка #{row_index + 1}: нет названия и адреса для нового ID #{identifier_raw}"
+              next
+            end
+
+            new_id = UuteDB.create(db, attrs)
+            added += 1
+            if added_examples.size < 50
+              added_examples << {
+                id: new_id,
+                source_row: row_index + 1,
+                name: attrs['name'],
+                address: attrs['address'],
+                identifier: attrs['identifier']
+              }
+            end
           end
         end
-        UuteDB.record_import(db, filename: filename || File.basename(path), added: added, updated: updated, skipped: skipped, total: total)
+        UuteDB.record_import(
+          db,
+          filename: filename || File.basename(path),
+          added: added,
+          updated: updated,
+          skipped: skipped,
+          total: total
+        )
         db.execute('COMMIT')
       rescue StandardError => e
         db.execute('ROLLBACK') rescue nil
@@ -1025,8 +1406,12 @@ module UuteService
       updated: updated,
       unchanged: unchanged,
       skipped: skipped,
+      ignored: 0,
+      not_found: 0,
       total: total,
-      updated_examples: updated_examples
+      updated_examples: updated_examples,
+      added_examples: added_examples,
+      warnings: warnings.uniq
     }
   end
 
@@ -1130,12 +1515,129 @@ module UuteService
 
   def resolved_columns(sheet)
     headers = header_columns(sheet)
-    XLS_COLUMNS.each_with_object({}) do |(key, fallback_col), memo|
-      header, occurrence = XLS_HEADERS[key]
-      memo[key] = headers[[normalize_header(header), occurrence]] || fallback_col
+    warnings = []
+    XLS_COLUMNS.each_with_object({}) do |(key, _fallback_col), memo|
+      memo[key] = resolve_column(headers, key, warnings)
     end
   end
   private_class_method :resolved_columns
+
+  def resolved_sync_columns(sheet)
+    resolved_import_columns(sheet)
+  end
+  private_class_method :resolved_sync_columns
+
+  def resolved_import_columns(sheet)
+    headers = header_columns(sheet)
+    warnings = []
+    keys = (EXCEL_CREATE_META_FIELDS + EXCEL_SYNC_FIELDS + %w[identifier]).uniq
+    columns = keys.each_with_object({}) do |key, memo|
+      memo[key] = resolve_column(headers, key, warnings)
+    end
+    [columns, warnings.uniq]
+  end
+  private_class_method :resolved_import_columns
+
+  def resolve_column(headers, key, warnings)
+    header, occurrence = XLS_HEADERS[key]
+    return nil unless header
+
+    candidates = [[normalize_header(header), occurrence]]
+    (HEADER_ALIASES[key] || []).each do |alias_text|
+      candidates << [normalize_header(alias_text), occurrence]
+    end
+    candidates.each do |norm, occ|
+      col = headers[[norm, occ]]
+      return col unless col.nil?
+    end
+
+    fallback = XLS_COLUMNS[key]
+    if fallback.nil?
+      warnings << "#{key}: column not found"
+      return nil
+    end
+    if fallback >= UNSAFE_FALLBACK_COL
+      warnings << "#{key}: column not found (unsafe fallback #{fallback} skipped)"
+      return nil
+    end
+
+    fallback
+  end
+  private_class_method :resolve_column
+
+  def open_data_sheet(path)
+    book = Spreadsheet.open(path)
+    sheet = book.worksheets.find { |ws| ws.name.to_s.include?('Гаражи') } || book.worksheets.first
+    raise ArgumentError, 'Лист с данными не найден' unless sheet
+
+    sheet
+  end
+  private_class_method :open_data_sheet
+
+  def identifiers_in_db(category)
+    UuteDB.with_db do |db|
+      db.execute(
+        "SELECT identifier FROM uute_objects WHERE category = ? AND COALESCE(TRIM(identifier), '') <> ''",
+        [category.to_s]
+      ).map { |row| row['identifier'].to_s.strip.downcase }
+    end
+  end
+  private_class_method :identifiers_in_db
+
+  def read_identifier(sheet, row_index, columns)
+    read_identifier_pair(sheet, row_index, columns).first
+  end
+  private_class_method :read_identifier
+
+  def read_identifier_pair(sheet, row_index, columns)
+    col = columns['identifier']
+    return ['', ''] if col.nil?
+
+    raw = cell_value(sheet[row_index, col], 'identifier').to_s.strip
+    [raw.downcase, raw]
+  end
+  private_class_method :read_identifier_pair
+
+  def build_create_attrs(sheet, row_index, columns, category:, identifier:)
+    attrs = {
+      'category' => category.to_s,
+      'identifier' => identifier,
+      'source_key' => "identifier:#{identifier.downcase}",
+      'source_row' => row_index + 1,
+      'periods_json' => JSON.generate([])
+    }
+    (EXCEL_CREATE_META_FIELDS + EXCEL_SYNC_FIELDS).each do |key|
+      col = columns[key]
+      next if col.nil?
+
+      attrs[key] = cell_value(sheet[row_index, col], key)
+    end
+    nearest = computed_nearest_verification(attrs)
+    attrs['nearest_verification_date'] = nearest unless nearest.empty?
+    attrs['raw_json'] = JSON.generate(import_row_snapshot(sheet, row_index, columns))
+    attrs
+  end
+  private_class_method :build_create_attrs
+
+  def import_row_snapshot(sheet, row_index, columns)
+    columns.each_with_object({}) do |(key, col), memo|
+      next if col.nil?
+
+      value = cell_value(sheet[row_index, col], key)
+      memo[key] = value unless value.to_s.empty?
+    end
+  end
+  private_class_method :import_row_snapshot
+
+  def sync_patch_from_row(sheet, row_index, columns)
+    EXCEL_SYNC_FIELDS.each_with_object({}) do |key, patch|
+      col = columns[key]
+      next if col.nil?
+
+      patch[key] = cell_value(sheet[row_index, col], key)
+    end
+  end
+  private_class_method :sync_patch_from_row
 
   def header_columns(sheet, row_index = 0)
     occurrences = Hash.new(0)

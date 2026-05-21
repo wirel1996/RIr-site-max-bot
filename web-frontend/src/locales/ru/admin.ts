@@ -51,6 +51,12 @@ export const adminRu = {
     billingCreatorsTitle: 'Создание следующего месяца ГВС',
     billingCreatorsHint:
       'Выбери пользователей сайта, которым разрешено создавать следующий месяц.',
+    meteringActCounterTitle: 'Нумерация актов ГСПО',
+    meteringActCounterHint:
+      'Сквозной номер для актов ввода, проверки и вывода. Отдельный счётчик на каждый год даты акта (дата ввода / проверки / вывода). Для 2026 — своя серия (500+), для другого года — свой старт с 1.',
+    meteringActCounterYear: 'Год',
+    meteringActCounterNext: 'Следующий № акта',
+    meteringActCounterSave: 'Сохранить',
     dailyBackupTitle: 'Ежедневный бэкап БД',
     sendBackup: 'Слать бэкап',
     backupTime: 'Время (Томск)',

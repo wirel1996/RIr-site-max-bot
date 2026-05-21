@@ -462,7 +462,11 @@ module BillingService
           payload[:volume_gvs], payload[:seal_number], payload[:seal_date], payload[:meter_type], active, now, now
         ]
       )
-      [object_details(row_num), nil]
+      created_row = db.get_first_row(
+        'SELECT * FROM billing_records WHERE sheet_id = ? AND row_num = ?',
+        [sheet[:id], row_num]
+      )
+      [created_row ? billing_record_to_api(created_row, sheet[:name]) : nil, nil]
     end
   end
 

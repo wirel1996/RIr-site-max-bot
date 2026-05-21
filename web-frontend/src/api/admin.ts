@@ -59,7 +59,27 @@ export const adminApi = {
   summerWaterAuditExportUrl: () => '/api/admin/audit/export?entity_type=summer_water',
   meteringAuditExportUrl: () => '/api/admin/metering-audit/export',
   journalAuditExportUrl: () => '/api/admin/journal-audit/export',
-  maxUsers: () => api.get<{ users: MaxUser[]; water_payment_notify_user_id: string; water_payment_notify_user_ids: string[]; journal_notify_user_ids: string[]; journal_notify_logins: string[]; site_user_max_bindings: Record<string, string>; daily_tasks_notify_time: string; billing_month_creator_logins: string[]; db_backup_enabled: boolean; db_backup_email: string; db_backup_daily_time: string; db_backup_notify_user_id: string }>('/admin/max-users'),
+  maxUsers: () =>
+    api.get<{
+      users: MaxUser[]
+      water_payment_notify_user_id: string
+      water_payment_notify_user_ids: string[]
+      journal_notify_user_ids: string[]
+      journal_notify_logins: string[]
+      site_user_max_bindings: Record<string, string>
+      daily_tasks_notify_time: string
+      billing_month_creator_logins: string[]
+      db_backup_enabled: boolean
+      db_backup_email: string
+      db_backup_daily_time: string
+      db_backup_notify_user_id: string
+      metering_act_counter: { category: string; year: number; next_number: number }
+    }>('/admin/max-users'),
+  updateMeteringActCounter: (payload: { category?: string; year: number; next_number: number }) =>
+    api.patch<{ metering_act_counter: { category: string; year: number; next_number: number } }>(
+      '/admin/settings/metering-act-counter',
+      payload,
+    ),
   updateWaterPaymentNotifyUsers: (userIds: string[]) =>
     api.patch<{ water_payment_notify_user_id: string; water_payment_notify_user_ids: string[] }>('/admin/settings/water-payment-notify', { user_ids: userIds }),
   updateJournalNotifyUsers: (userIds: string[]) =>

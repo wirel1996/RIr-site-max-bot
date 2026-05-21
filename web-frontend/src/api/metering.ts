@@ -1,4 +1,4 @@
-import { api } from './client'
+﻿import { api } from './client'
 
 export type MeteringRecord = {
   id: number
@@ -13,6 +13,7 @@ export type MeteringRecord = {
   admit_until: string | null
   date_output_uute: string | null
   output_reason: string | null
+  act_number: string | null
   act_primary_number: string | null
   act_periodic_number: string | null
   registration_date: string | null
@@ -176,7 +177,10 @@ export type MeteringImportResult = {
   updated: number
   unchanged?: number
   skipped: number
+  not_found?: number
+  ignored?: number
   total: number
+  warnings?: string[]
   updated_examples?: Array<{
     id: number
     source_row: number
@@ -186,6 +190,31 @@ export type MeteringImportResult = {
     changed_fields: string[]
     changes?: Record<string, { before: string; after: string }>
   }>
+  not_found_examples?: Array<{
+    source_row: number
+    identifier: string
+  }>
+  ignored_examples?: Array<{
+    source_row: number
+    identifier: string
+  }>
+  added_examples?: Array<{
+    id: number
+    source_row: number
+    name: string | null
+    address: string | null
+    identifier: string | null
+  }>
+}
+
+export type MeteringCompareIdentifiersResult = {
+  matched_count: number
+  file_count: number
+  db_count: number
+  in_file_only: string[]
+  in_db_only: string[]
+  duplicates_in_file: string[]
+  warnings?: string[]
 }
 
 export type WaterRegistryRecord = {
@@ -221,6 +250,7 @@ export type WaterRegistryRecord = {
   tf_in_ts: string | null
   tf_in_ts_date: string | null
   connection_act: string | null
+  connection_act_note: string | null
   illegal_connection_2025: string | null
   illegal_connection_2026: string | null
   contact_id: number | null
@@ -305,11 +335,38 @@ export type MeteringFieldAuditLog = {
   new_value: string
 }
 
+export type ActKind = 'input' | 'check' | 'output'
+
+export type MeteringActHistoryChange = {
+  field: string
+  old_value: string
+  new_value: string
+}
+
+export type MeteringActHistoryEvent = {
+  kind: ActKind
+  event: 'submit' | 'delete'
+  act_number: string
+  act_date: string
+  created_at: number
+  actor_name: string
+  actor_login: string
+  changes: MeteringActHistoryChange[]
+}
+
+export type MeteringActDeletable = {
+  kind: ActKind
+  act_number: string
+  label: string
+}
+
+export type MeteringActHistoryResponse = {
+  events: MeteringActHistoryEvent[]
+  deletable: MeteringActDeletable[]
+}
+
 export type SubmitActPayload = Partial<MeteringRecord> & {
-  act_primary_mode?: 'auto' | 'manual' | 'start_from'
-  act_periodic_mode?: 'auto' | 'manual' | 'start_from'
-  act_primary_start_from?: number
-  act_periodic_start_from?: number
+  act_kind: ActKind
   extra_seals?: { flowmeter: Record<string, string>; temp_sensor: Record<string, string> }
   extra_flowmeter_indices?: number[]
   extra_temp_indices?: number[]
@@ -333,8 +390,8 @@ export const meteringApi = {
     api.patch<MeteringRecord>(`/metering/${category}/${id}`, payload),
   submitAct: (category: string, id: number, payload: SubmitActPayload) =>
     api.post<MeteringRecord>(`/metering/${category}/${id}/submit-act`, payload),
-  revertLastAct: (category: string, id: number) =>
-    api.post<MeteringRecord>(`/metering/${category}/${id}/revert-last-act`, {}),
+  deleteAct: (category: string, id: number, payload: { act_kind: ActKind }) =>
+    api.post<MeteringRecord>(`/metering/${category}/${id}/delete-act`, payload),
   fieldHistory: (category: string, id: number, field: string, limit = 20) =>
     api.get<{ logs: MeteringFieldAuditLog[] }>(
       `/metering/${category}/${id}/field-history?field=${encodeURIComponent(field)}&limit=${limit}`,
@@ -342,6 +399,10 @@ export const meteringApi = {
   blockHistory: (category: string, id: number, fields: string[], limit = 50) =>
     api.get<{ logs: MeteringFieldAuditLog[] }>(
       `/metering/${category}/${id}/block-history?fields=${fields.map(encodeURIComponent).join(',')}&limit=${limit}`,
+    ),
+  actHistory: (category: string, id: number, limit = 50) =>
+    api.get<MeteringActHistoryResponse>(
+      `/metering/${category}/${id}/act-history?limit=${limit}`,
     ),
   people: () => api.get<{ people: string[] }>('/metering/people'),
   gspoUpdate: (id: number, payload: Partial<MeteringRecord>) => meteringApi.update('gspo', id, payload),
@@ -367,6 +428,12 @@ export const meteringApi = {
     return api.upload<MeteringImportResult>(`/metering/${category}/import`, formData)
   },
   importGspo: (file: File) => meteringApi.importMetering('gspo', file),
+  compareIdentifiers: (category: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.upload<MeteringCompareIdentifiersResult>(`/metering/${category}/compare-identifiers`, formData)
+  },
+  compareGspoIdentifiers: (file: File) => meteringApi.compareIdentifiers('gspo', file),
   listWater: (
     page = 0,
     query = '',

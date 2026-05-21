@@ -215,6 +215,7 @@ module UuteDB
       'seal_cut_2' => 'TEXT',
       'seal_cut_3' => 'TEXT',
       'seal_cut_4' => 'TEXT',
+      'act_number' => 'TEXT',
       'calculator_verification_date' => 'TEXT',
       'flowmeter_verification_date_1' => 'TEXT',
       'flowmeter_verification_date_2' => 'TEXT',
@@ -233,6 +234,32 @@ module UuteDB
     }.each do |name, type|
       db.execute("ALTER TABLE uute_objects ADD COLUMN #{name} #{type}") unless columns.include?(name)
     end
+  end
+
+  def find_by_identifier(db, identifier, category: 'gspo')
+    id_norm = identifier.to_s.strip.downcase
+    return nil if id_norm.empty?
+
+    db.get_first_row(
+      "SELECT * FROM uute_objects WHERE category = ? AND lower_ru(COALESCE(identifier, '')) = ?",
+      [category.to_s, id_norm]
+    )
+  end
+
+  def patch_object(db, id, patch)
+    existing = find(db, id.to_i)
+    return { status: :not_found, changed_fields: [], changes: {} } unless existing
+
+    patch = patch.transform_keys(&:to_s)
+    changes = changes_for(existing, patch)
+    return { status: :unchanged, changed_fields: [], changes: {}, id: existing['id'] } if changes.empty?
+
+    now = Time.now.to_i
+    keys = patch.keys
+    assignments = keys.map { |k| "#{k} = ?" }.join(', ')
+    values = patch.values + [now, id.to_i]
+    db.execute("UPDATE uute_objects SET #{assignments}, updated_at = ? WHERE id = ?", values)
+    { status: :updated, changed_fields: changes.keys, changes: changes, id: existing['id'] }
   end
 
   def upsert_object(db, attrs)
@@ -410,7 +437,11 @@ module UuteDB
   end
 
   def max_act_number_in_category(db, category:, kind:, year:, field:)
-    col = kind == 'primary' ? 'act_primary_number' : 'act_periodic_number'
+    col = case kind.to_s
+          when 'act' then 'act_number'
+          when 'primary' then 'act_primary_number'
+          else 'act_periodic_number'
+          end
     rows = db.execute(
       "SELECT #{col} AS num FROM uute_objects WHERE category = ? AND #{col} IS NOT NULL AND TRIM(#{col}) <> ''",
       [category.to_s]

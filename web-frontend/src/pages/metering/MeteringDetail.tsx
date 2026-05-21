@@ -2,11 +2,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AdmissionActModal from '../../components/AdmissionActModal'
+import MeteringActHistory from '../../components/MeteringActHistory'
+import MeteringActToolbar from '../../components/MeteringActToolbar'
 import ArshinMeterCheckModal, { type ArshinMeterDevice } from '../../components/ArshinMeterCheckModal'
 import MeteringBlockHistory, { collectBlockAuditFields } from '../../components/MeteringBlockHistory'
 import { ARSHIN_METER_DEVICES, hasFailedArshinCheck } from '../../components/arshinMeterDevices'
 import { arshinApi, type ArshinItem } from '../../api/arshin'
-import { meteringApi, type MeteringRecord } from '../../api/metering'
+import { meteringApi, type ActKind, type MeteringRecord } from '../../api/metering'
 import { getPreferredMitNotation } from '../../utils/arshinTypePrefs'
 import { meteringRu as t } from '../../locales/ru/metering'
 import RegistryObjectCard from '../../components/RegistryObjectCard'
@@ -113,15 +115,22 @@ export default function MeteringDetail() {
     error?: string
   }>>([])
   const [bulkMessage, setBulkMessage] = useState('')
-  const [actModalOpen, setActModalOpen] = useState(false)
+  const [actModalKind, setActModalKind] = useState<ActKind | null>(null)
 
-  const revertLastActMutation = useMutation({
-    mutationFn: () => meteringApi.revertLastAct(cat, Number(id)),
+  const deleteActMutation = useMutation({
+    mutationFn: (kind: ActKind) => meteringApi.deleteAct(cat, Number(id), { act_kind: kind }),
     onSuccess: (record) => {
       queryClient.setQueryData(['metering', cat, 'detail', id], record)
       queryClient.invalidateQueries({ queryKey: ['metering', cat] })
       queryClient.invalidateQueries({ queryKey: ['metering', cat, 'block-history'] })
+      void queryClient.refetchQueries({ queryKey: ['metering', cat, 'act-history', String(id)] })
     },
+  })
+
+  const actHistoryQuery = useQuery({
+    queryKey: ['metering', cat, 'act-history', String(id)],
+    queryFn: () => meteringApi.actHistory(cat, Number(id)),
+    enabled: !!id,
   })
 
   const { data, isLoading, error } = useQuery({
@@ -321,45 +330,39 @@ export default function MeteringDetail() {
             <p className="text-xs uppercase text-gray-500">{CATEGORY_LABELS[cat] || cat}</p>
             <h1 className="text-xl font-bold">{data.name || t.detail.noName}</h1>
             <p className="mt-1 text-sm text-gray-600">{data.address}</p>
+            {data.act_number && (
+              <p className="mt-1 text-sm text-gray-700">
+                № акта: <span className="font-medium">{data.act_number}</span>
+              </p>
+            )}
             {hasFailedArshinCheck(data) && (
               <p className="mt-2 text-sm font-medium text-red-700">{t.detail.arshinWarn}</p>
             )}
           </div>
           {id && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActModalOpen(true)}
-                className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-100"
-              >
-                {t.detail.enterAct}
-              </button>
-              <a
-                href={meteringApi.admissionActUrl(cat, Number(id))}
-                className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-800 hover:bg-blue-100"
-              >
-                {t.detail.downloadAct}
-              </a>
-              <button
-                type="button"
-                disabled={revertLastActMutation.isPending}
-                onClick={() => {
-                  if (!window.confirm(t.detail.revertLastActConfirm)) return
-                  revertLastActMutation.mutate()
-                }}
-                className="rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-              >
-                {revertLastActMutation.isPending ? t.detail.saving : t.detail.revertLastAct}
-              </button>
-            </div>
+            <MeteringActToolbar
+              category={cat}
+              recordId={Number(id)}
+              deletable={actHistoryQuery.data?.deletable ?? []}
+              onEnterAct={setActModalKind}
+              onDeleteAct={(kind) => deleteActMutation.mutate(kind)}
+              deletePending={deleteActMutation.isPending}
+              deleteConfirm={{
+                input: t.detail.deleteActInputConfirm,
+                check: t.detail.deleteActCheckConfirm,
+                output: t.detail.deleteActOutputConfirm,
+              }}
+            />
           )}
-          {revertLastActMutation.error && (
+          {deleteActMutation.error && (
             <p className="mt-2 text-sm text-red-700">
-              {t.detail.revertLastActFailed}: {(revertLastActMutation.error as Error).message}
+              {t.detail.deleteActFailed}: {(deleteActMutation.error as Error).message}
             </p>
           )}
         </div>
       </div>
+
+      {id && <MeteringActHistory category={cat} recordId={Number(id)} />}
 
       <RegistryObjectCard
         objectId={data.object_id}
@@ -677,13 +680,14 @@ export default function MeteringDetail() {
         </section>
       )})}
 
-      {actModalOpen && id && (
+      {actModalKind && id && (
         <AdmissionActModal
           open
+          kind={actModalKind}
           category={cat}
           recordId={Number(id)}
           record={data}
-          onClose={() => setActModalOpen(false)}
+          onClose={() => setActModalKind(null)}
         />
       )}
 

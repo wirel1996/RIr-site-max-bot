@@ -5,7 +5,7 @@ export type ObjectRecord = { id: number; name: string | null; address: string | 
 export type ObjectDetail = {
   object: ObjectRecord
   contacts: Array<{ id: number; category: string; name: string | null; address: string | null; identifier: string | null }>
-  uute: Array<{ id: number; name: string | null; address: string | null; identifier: string | null }>
+  uute: Array<{ id: number; category: string | null; name: string | null; address: string | null; identifier: string | null }>
   water: Array<{ id: number; gspo_name: string | null; standalone_address: string | null; identifier: string | null }>
 }
 

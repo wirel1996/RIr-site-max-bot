@@ -33,6 +33,7 @@ const FIELDS: Array<[keyof WaterRegistryRecord, string]> = [
   ['tf_in_ts', 'ТФ в ТС'],
   ['tf_in_ts_date', 'Дата ТФ в ТС'],
   ['connection_act', 'Акт подключения'],
+  ['connection_act_note', 'Примечание к акту подключения'],
   ['illegal_connection_2025', 'Незаконное подключение 2025'],
   ['illegal_connection_2026', 'Незаконное подключение 2026'],
 ]

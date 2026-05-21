@@ -26,7 +26,9 @@ export default function MeteringGspo() {
     mutationFn: (file: File) => meteringApi.importGspo(file),
     onSuccess: async (result) => {
       const unchanged = result.unchanged ?? 0
-      setMessage(t.gspo.importMessage(result.added, result.updated, unchanged, result.skipped))
+      let msg = t.gspo.importMessage(result.added, result.updated, unchanged, result.skipped)
+      if (result.warnings?.length) msg += ` Предупреждения: ${result.warnings.length}.`
+      setMessage(msg)
       setImportDetails(result.updated_examples ?? [])
       setImportDetailsOpen((result.updated_examples ?? []).length > 0)
       await queryClient.invalidateQueries({ queryKey: ['metering'] })
@@ -55,14 +57,13 @@ export default function MeteringGspo() {
         <div>
           <h1 className="text-2xl font-bold">{t.gspo.title}</h1>
           <p className="text-sm text-gray-600">{data ? t.gspo.total(data.total) : t.gspo.fallbackTotal}{isFetching ? t.gspo.refreshing : ''}</p>
-          {data?.last_import && <p className="text-xs text-gray-500">{t.gspo.lastImport}: {new Date(data.last_import.imported_at * 1000).toLocaleString('ru-RU')}</p>}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t.gspo.searchPlaceholder} className="w-full rounded border bg-white px-3 py-2 text-sm sm:w-96" />
           <a href={meteringApi.gspoExportUrl()} className="inline-flex items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">{t.gspo.export}</a>
           {(user?.role === 'admin' || user?.role === 'full') && (
-            <label className="inline-flex cursor-pointer items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              {importMutation.isPending ? t.gspo.uploading : t.gspo.upload}
+            <label className="inline-flex cursor-pointer items-center justify-center rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 hover:bg-blue-100">
+              {importMutation.isPending ? t.gspo.uploading : t.gspo.actualize}
               <input type="file" accept=".xls,.xlsx" className="hidden" disabled={importMutation.isPending} onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.currentTarget.value = '' }} />
             </label>
           )}

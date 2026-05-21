@@ -43,7 +43,7 @@ module ObjectsService
     end
     uute = UuteDB.with_db do |db|
       db.execute(
-        "SELECT id, name, address, identifier FROM uute_objects WHERE object_id = ? ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, ''), id",
+        "SELECT id, category, name, address, identifier FROM uute_objects WHERE object_id = ? ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, ''), id",
         [id.to_i]
       )
     end
@@ -57,7 +57,7 @@ module ObjectsService
     {
       object: public_object(object),
       contacts: contacts.map { |r| { id: r['id'].to_i, category: r['category'], name: r['name'], address: r['address'], identifier: r['identifier'] } },
-      uute: uute.map { |r| { id: r['id'].to_i, name: r['name'], address: r['address'], identifier: r['identifier'] } },
+      uute: uute.map { |r| { id: r['id'].to_i, category: r['category'], name: r['name'], address: r['address'], identifier: r['identifier'] } },
       water: water.map { |r| { id: r['id'].to_i, gspo_name: r['gspo_name'], standalone_address: r['standalone_address'], identifier: r['identifier'] } }
     }
   end

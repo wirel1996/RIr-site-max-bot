@@ -31,7 +31,7 @@ export function buildFlowmeterSealSlots(record: MeteringRecord, extraIndices: nu
     })
   }
   extraIndices.forEach((i) => {
-    if (i <= 4 || slots.some((s) => s.kind === 'flowmeter' && s.index === i)) return
+    if (slots.some((s) => s.kind === 'flowmeter' && s.index === i)) return
     slots.push({
       kind: 'flowmeter',
       index: i,
@@ -56,7 +56,7 @@ export function buildTempSealSlots(record: MeteringRecord, extraIndices: number[
     })
   }
   extraIndices.forEach((i) => {
-    if (i <= 4 || slots.some((s) => s.kind === 'temp_sensor' && s.index === i)) return
+    if (slots.some((s) => s.kind === 'temp_sensor' && s.index === i)) return
     slots.push({
       kind: 'temp_sensor',
       index: i,
@@ -75,7 +75,7 @@ export function nextExtraSealIndex(kind: 'flowmeter' | 'temp_sensor', record: Me
     if (kind === 'temp_sensor' && tempSerialFilled(record, i)) used.add(i)
   }
   extra.forEach((i) => used.add(i))
-  let n = 5
+  let n = 1
   while (used.has(n)) n += 1
   return n
 }

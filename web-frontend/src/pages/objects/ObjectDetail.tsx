@@ -73,7 +73,7 @@ export default function ObjectDetail() {
               <div className="font-medium">{data.uute[0].name || '—'}</div>
               <div className="text-gray-600">{data.uute[0].address || '—'}</div>
               <div className="mt-1">
-                <Link to={`/metering/gspo/${data.uute[0].id}`} className="text-blue-700 hover:underline">Открыть</Link>
+                <Link to={`/metering/${data.uute[0].category || 'gspo'}/${data.uute[0].id}`} className="text-blue-700 hover:underline">Открыть</Link>
               </div>
             </div>
           )}

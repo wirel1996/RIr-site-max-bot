@@ -104,6 +104,7 @@ module WaterRegistryDB
 
     columns = db.execute('PRAGMA table_info(water_registry_rows)').map { |row| row['name'] }
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN third_party_disconnection_note TEXT') unless columns.include?('third_party_disconnection_note')
+    db.execute('ALTER TABLE water_registry_rows ADD COLUMN connection_act_note TEXT') unless columns.include?('connection_act_note')
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN application_date TEXT') unless columns.include?('application_date')
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN water_supplied TEXT') unless columns.include?('water_supplied')
     db.execute('ALTER TABLE water_registry_rows ADD COLUMN tf_in_ts_date TEXT') unless columns.include?('tf_in_ts_date')
@@ -236,7 +237,7 @@ module WaterRegistryDB
       point_number actual_connection_point connected point_filter gspo_count_in_point
       leader_name phone metering_presence application application_date no_debt power_of_attorney contract uute
       uute_verified
-      third_party_disconnection third_party_disconnection_note payment payment_date water_supplied verdict note all_except_payment tf_in_ts tf_in_ts_date connection_act
+      third_party_disconnection third_party_disconnection_note payment payment_date water_supplied verdict note all_except_payment tf_in_ts tf_in_ts_date connection_act connection_act_note
       illegal_connection_2025 illegal_connection_2026 contact_id uute_id uute_verification_until uute_match_note
     ]
   end
@@ -251,9 +252,10 @@ module WaterRegistryDB
         "lower_ru(COALESCE(gspo_name, '')) LIKE ? OR " \
         "lower_ru(COALESCE(standalone_address, '')) LIKE ? OR " \
         "lower_ru(COALESCE(leader_name, '')) LIKE ? OR " \
-        "lower_ru(COALESCE(phone, '')) LIKE ?" \
+        "lower_ru(COALESCE(phone, '')) LIKE ? OR " \
+        "lower_ru(COALESCE(note, '')) LIKE ?" \
       ')'
-      values.concat([q, q, q, q])
+      values.concat([q, q, q, q, q])
     end
 
     unless point.to_s.strip.empty?

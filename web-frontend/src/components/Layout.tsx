@@ -8,8 +8,6 @@ const navItems = [
 
 const objectItems = [
   { to: '/objects', label: 'Объекты' },
-  { to: '/objects/gspo', label: 'ГСПО' },
-  { to: '/objects/phys', label: 'Прочие ФЛ' },
   { to: '/contacts', label: 'Контакты' },
   { to: '/metering/gspo', label: 'Приборы учета' },
   { to: '/summer-water', label: 'Вода на лето ГСПО', waterAllowed: true },
@@ -82,19 +80,21 @@ export default function Layout() {
                 >
                   Объекты
                 </button>
-                <div className="invisible absolute left-0 top-full z-[60] min-w-56 rounded border bg-white py-1 shadow-lg opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                  {visibleObjectItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      reloadDocument
-                      className={({ isActive }) =>
-                        `block px-3 py-2 text-sm ${isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
+                <div className="invisible absolute left-0 top-full z-[60] min-w-56 pt-1 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                  <div className="rounded border bg-white py-1 shadow-lg">
+                    {visibleObjectItems.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        reloadDocument
+                        className={({ isActive }) =>
+                          `block px-3 py-2 text-sm ${isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -106,19 +106,21 @@ export default function Layout() {
                 >
                   Сервисы
                 </button>
-                <div className="invisible absolute left-0 top-full z-[60] min-w-56 rounded border bg-white py-1 shadow-lg opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                  {visibleServiceItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      reloadDocument
-                      className={({ isActive }) =>
-                        `block px-3 py-2 text-sm ${isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
+                <div className="invisible absolute left-0 top-full z-[60] min-w-56 pt-1 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                  <div className="rounded border bg-white py-1 shadow-lg">
+                    {visibleServiceItems.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        reloadDocument
+                        className={({ isActive }) =>
+                          `block px-3 py-2 text-sm ${isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

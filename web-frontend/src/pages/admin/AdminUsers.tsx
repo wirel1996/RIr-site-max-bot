@@ -97,11 +97,20 @@ export default function AdminUsers() {
   const dbBackupNotifyUserId = maxUsersQuery.data?.db_backup_notify_user_id ?? ''
   const [dbBackupNotifyDraft, setDbBackupNotifyDraft] = useState('')
   const dailyNotifyTime = maxUsersQuery.data?.daily_tasks_notify_time || '08:00'
+  const meteringActCounter = maxUsersQuery.data?.metering_act_counter
+  const [actCounterYear, setActCounterYear] = useState(new Date().getFullYear())
+  const [actCounterNext, setActCounterNext] = useState('1')
   const canDeleteSelected = editForm && currentUser?.login !== editForm.login
 
   useEffect(() => {
     setDbBackupNotifyDraft(dbBackupNotifyUserId)
   }, [dbBackupNotifyUserId])
+
+  useEffect(() => {
+    if (!meteringActCounter) return
+    setActCounterYear(meteringActCounter.year)
+    setActCounterNext(String(meteringActCounter.next_number))
+  }, [meteringActCounter?.year, meteringActCounter?.next_number])
 
   const createMutation = useMutation({
     mutationFn: () => adminApi.createUser(createForm),
@@ -179,6 +188,19 @@ export default function AdminUsers() {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
     },
     onError: (e: { message?: string }) => setMessage(e.message || t.messages.dailyTimeUpdateFailed),
+  })
+  const meteringActCounterMutation = useMutation({
+    mutationFn: () =>
+      adminApi.updateMeteringActCounter({
+        category: 'gspo',
+        year: actCounterYear,
+        next_number: Number(actCounterNext) || 1,
+      }),
+    onSuccess: async (res) => {
+      setMessage(`Нумерация актов: с ${res.metering_act_counter.next_number} (${res.metering_act_counter.year})`)
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
+    },
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось сохранить нумерацию'),
   })
   const billingCreatorsMutation = useMutation({
     mutationFn: (logins: string[]) => adminApi.updateBillingMonthCreators(logins),
@@ -290,6 +312,41 @@ export default function AdminUsers() {
                   </label>
                 )
               })}
+            </div>
+          </section>
+          <section className="rounded-lg bg-white p-4 shadow">
+            <h2 className="mb-3 text-lg font-semibold">{t.notifications.meteringActCounterTitle}</h2>
+            <p className="mb-3 text-xs text-gray-600">{t.notifications.meteringActCounterHint}</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm">
+                <div className="mb-1 text-gray-600">{t.notifications.meteringActCounterYear}</div>
+                <input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={actCounterYear}
+                  onChange={(e) => setActCounterYear(Number(e.target.value) || new Date().getFullYear())}
+                  className="w-24 rounded border px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-sm">
+                <div className="mb-1 text-gray-600">{t.notifications.meteringActCounterNext}</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={actCounterNext}
+                  onChange={(e) => setActCounterNext(e.target.value)}
+                  className="w-28 rounded border px-3 py-2 text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={meteringActCounterMutation.isPending}
+                onClick={() => meteringActCounterMutation.mutate()}
+                className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {t.notifications.meteringActCounterSave}
+              </button>
             </div>
           </section>
           <section className="rounded-lg bg-white p-4 shadow">

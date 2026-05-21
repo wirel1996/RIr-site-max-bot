@@ -377,8 +377,22 @@ class ContactsWeb < Sinatra::Base
       db_backup_enabled: DbBackupService.enabled?,
       db_backup_email: DbBackupService.email_to,
       db_backup_daily_time: DbBackupService.daily_time,
-      db_backup_notify_user_id: MaxNotifyService.db_backup_notify_user_id
+      db_backup_notify_user_id: MaxNotifyService.db_backup_notify_user_id,
+      metering_act_counter: UuteService.metering_act_counter_info('gspo')
     )
+  end
+
+  patch '/api/admin/settings/metering-act-counter' do
+    require_admin!
+    body = parse_json_body
+    category = body['category'].to_s.strip
+    category = 'gspo' if category.empty?
+    year = body['year']
+    next_number = body['next_number']
+    info = UuteService.set_metering_act_counter(category: category, year: year, next_number: next_number)
+    json_response(metering_act_counter: info)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
   end
 
   patch '/api/auth/profile' do
@@ -1243,7 +1257,8 @@ class ContactsWeb < Sinatra::Base
     label = ContactsDB::CATEGORY_LABELS[cat] || cat
     Spreadsheet.client_encoding = 'UTF-8'
     book = Spreadsheet::Workbook.new
-    sheet = book.create_worksheet(name: "Приборы учета #{label}")
+    sheet_name = cat == 'gspo' ? 'Гаражи' : "Приборы учета #{label}"
+    sheet = book.create_worksheet(name: sheet_name)
 
     columns = UuteService::EXPORT_COLUMNS
     columns.each_with_index { |(_, label), i| sheet[0, i] = label }
@@ -1251,25 +1266,61 @@ class ContactsWeb < Sinatra::Base
 
     wrap_format = Spreadsheet::Format.new(text_wrap: true)
 
+    list_number_format = Spreadsheet::Format.new(number_format: '0')
+    highlight_formats = UuteService.export_highlight_formats
+
     columns.each_with_index do |(key, _), col_idx|
       case key
+      when 'list_number'
+        sheet.column(col_idx).width = 8
+        sheet.column(col_idx).default_format = list_number_format
       when 'name', 'address'
         sheet.column(col_idx).width = 40
         sheet.column(col_idx).default_format = wrap_format
-      when 'nearest_verification_date', 'admit_until', 'date_input_uute', 'date_output_uute',
-           'calculator_verification_date',
-           'flowmeter_verification_date_1', 'flowmeter_verification_date_2', 'flowmeter_verification_date_3', 'flowmeter_verification_date_4',
-           'temp_sensor_verification_date_1', 'temp_sensor_verification_date_2', 'temp_sensor_verification_date_3', 'temp_sensor_verification_date_4',
-           'pressure_sensor_verification_date_1', 'pressure_sensor_verification_date_2', 'pressure_sensor_verification_date_3', 'pressure_sensor_verification_date_4',
-           'registration_date', 'check_date', 'readings_date'
+      when 'identifier'
+        sheet.column(col_idx).width = 38
+      when 'date_input_uute', 'date_output_uute'
+        sheet.column(col_idx).width = 14
+        sheet.column(col_idx).default_format = highlight_formats[:date]
+      when 'admit_until'
+        sheet.column(col_idx).width = 14
+        sheet.column(col_idx).default_format = highlight_formats[:date]
+      when 'output_reason'
+        sheet.column(col_idx).width = 24
+      when 'calculator_verification_date',
+           'flowmeter_verification_date_1', 'flowmeter_verification_date_2',
+           'temp_sensor_verification_date_1', 'temp_sensor_verification_date_2',
+           'pressure_sensor_verification_date_1', 'pressure_sensor_verification_date_2',
+           'readings_date'
         sheet.column(col_idx).width = 12
+        sheet.column(col_idx).default_format = highlight_formats[:date]
+      when 'calculator_serial', 'flowmeter_serial_1', 'flowmeter_serial_2',
+           'temp_sensor_serial_1', 'temp_sensor_serial_2',
+           'pressure_sensor_serial_1', 'pressure_sensor_serial_2'
+        sheet.column(col_idx).width = 14
       end
     end
 
     records.each_with_index do |record, idx|
+      row_num = idx + 1
+      admit_highlight = UuteService.export_row_highlight(record[:admit_until])
+      admit_format = case admit_highlight
+                       when :red then highlight_formats[:red]
+                       when :yellow then highlight_formats[:yellow]
+                       end
+
       columns.each_with_index do |(key, _), col_idx|
         val = record[key.to_sym]
-        sheet[idx + 1, col_idx] = (val.nil? || val.to_s.strip.empty?) ? '' : val.to_s.strip
+        value = UuteService.export_cell_value(key, val)
+        sheet[row_num, col_idx] = value
+        fmt = if key == 'list_number'
+                list_number_format
+              elsif key == 'admit_until' && admit_format
+                admit_format
+              elsif UuteService::EXPORT_DATE_FIELDS.include?(key)
+                highlight_formats[:date]
+              end
+        sheet.row(row_num).set_format(col_idx, fmt) if fmt
       end
     end
 
@@ -1293,7 +1344,7 @@ class ContactsWeb < Sinatra::Base
     file = params[:file]
     halt 400, json_error('file required', 400) unless file && file[:tempfile]
 
-    result = UuteService.import_file(file[:tempfile].path, filename: file[:filename])
+    result = UuteService.import_file(file[:tempfile].path, filename: file[:filename], category: cat)
     audit!(
       action: 'metering_import',
       entity_type: 'metering',
@@ -1301,6 +1352,17 @@ class ContactsWeb < Sinatra::Base
       entity_label: file[:filename].to_s,
       details: result
     )
+    json_response(result)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  post '/api/metering/:category/compare-identifiers' do |cat|
+    require_billing_access!
+    file = params[:file]
+    halt 400, json_error('file required', 400) unless file && file[:tempfile]
+
+    result = UuteService.compare_identifiers(file[:tempfile].path, category: cat)
     json_response(result)
   rescue ArgumentError => e
     halt 400, json_error(e.message, 400)
@@ -1555,29 +1617,31 @@ class ContactsWeb < Sinatra::Base
   end
 
   post '/api/metering/:category/:id/submit-act' do |_cat, id|
-    body = parse_json_body
-    before = UuteService.find(id)
-    halt 404, json_error('not found', 404) unless before
+      body = parse_json_body
+  before = UuteService.find(id)
+  halt 404, json_error('not found', 404) unless before
 
-    record = UuteService.submit_act(id, body)
-    changed_fields = UuteService::ACT_SUBMIT_FIELDS.select { |f| body.key?(f) || body.key?(f.to_sym) }
-    changed_fields += %w[act_primary_number act_periodic_number periods_json] if body['act_primary_mode'] || body['act_periodic_mode']
-    AuditLogService.record_changes(
-      actor: current_user,
-      action: 'metering_act_submit',
-      entity_type: 'metering',
-      entity_id: id.to_s,
-      entity_label: billing_label(record),
-      before: before || {},
-      after: record || {},
-      fields: changed_fields.uniq,
-      ip: request_ip,
-      user_agent: request.user_agent
-    )
-    json_response(record)
-  rescue ArgumentError => e
-    halt 400, json_error(e.message, 400)
-  end
+  result = UuteService.submit_act(id, body)
+  record = result[:record]
+  act_kind = result[:act_kind].to_s
+  audit_action = UuteService.act_submit_audit_action(act_kind)
+  changed_fields = result[:fields].map(&:to_s)
+  AuditLogService.record_changes(
+    actor: current_user,
+    action: audit_action,
+    entity_type: 'metering',
+    entity_id: id.to_s,
+    entity_label: billing_label(record),
+    before: before || {},
+    after: record || {},
+    fields: changed_fields.uniq,
+    ip: request_ip,
+    user_agent: request.user_agent
+  )
+  json_response(record)
+    rescue ArgumentError => e
+  halt 400, json_error(e.message, 400)
+    end
 
   get '/api/metering/:category/:id/field-history' do |_cat, id|
     field = params[:field].to_s.strip
@@ -1589,28 +1653,31 @@ class ContactsWeb < Sinatra::Base
     json_response(logs: logs)
   end
 
-  post '/api/metering/:category/:id/revert-last-act' do |_cat, id|
-    before = UuteService.find(id)
-    halt 404, json_error('not found', 404) unless before
+  post '/api/metering/:category/:id/delete-act' do |_cat, id|
+      body = parse_json_body
+  before = UuteService.find(id)
+  halt 404, json_error('not found', 404) unless before
 
-    result = UuteService.revert_last_act(id)
-    record = result[:record]
-    AuditLogService.record_changes(
-      actor: current_user,
-      action: 'metering_act_revert',
-      entity_type: 'metering',
-      entity_id: id.to_s,
-      entity_label: billing_label(record),
-      before: before || {},
-      after: record || {},
-      fields: result[:fields],
-      ip: request_ip,
-      user_agent: request.user_agent
-    )
-    json_response(record)
-  rescue ArgumentError => e
-    halt 400, json_error(e.message, 400)
-  end
+  act_kind = body['act_kind'].to_s
+  result = UuteService.delete_act(id, act_kind: act_kind)
+  record = result[:record]
+  audit_action = UuteService.act_delete_audit_action(act_kind)
+  AuditLogService.record_changes(
+    actor: current_user,
+    action: audit_action,
+    entity_type: 'metering',
+    entity_id: id.to_s,
+    entity_label: billing_label(record),
+    before: before || {},
+    after: record || {},
+    fields: result[:fields].map(&:to_s),
+    ip: request_ip,
+    user_agent: request.user_agent
+  )
+  json_response(record)
+    rescue ArgumentError => e
+  halt 400, json_error(e.message, 400)
+    end
 
   get '/api/metering/:category/:id/block-history' do |_cat, id|
     fields = params[:fields].to_s.split(',').map(&:strip).reject(&:empty?)
@@ -1620,6 +1687,12 @@ class ContactsWeb < Sinatra::Base
     limit = 50 if limit <= 0
     logs = UuteService.block_history(id, fields: fields, limit: limit)
     json_response(logs: logs)
+  end
+
+  get '/api/metering/:category/:id/act-history' do |_cat, id|
+    limit = params[:limit].to_i
+    limit = 50 if limit <= 0
+    json_response(UuteService.act_history(id, limit: limit))
   end
 
   post '/api/metering/:category/:id/arshin-apply' do |_cat, id|

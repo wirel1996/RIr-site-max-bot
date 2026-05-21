@@ -53,7 +53,6 @@ const YES_NO_FIELDS = new Set<keyof WaterRegistryRecord>([
   'verdict',
   'all_except_payment',
   'tf_in_ts',
-  'connection_act',
 ])
 
 const CREATE_FIELDS: Array<[keyof WaterRegistryRecord, string, string]> = [
@@ -188,6 +187,22 @@ function cellText(record: WaterRegistryRecord, key: keyof WaterRegistryRecord) {
 function isYes(value: string) {
   const normalized = value.trim().toLowerCase()
   return normalized === 'да' || normalized === 'рґр°'
+}
+
+function hasText(value: string | null | undefined) {
+  return (value ?? '').trim().length > 0
+}
+
+/** Акт подключения оформлен — да или заполнено примечание */
+function connectionActFilled(record: WaterRegistryRecord) {
+  return isYes(cellText(record, 'connection_act')) || hasText(record.connection_act_note)
+}
+
+/** Бледно-красная ячейка «Отключение сторонних», если есть примечание и акт подключения ещё нет */
+function thirdPartyDisconnectionCellClass(record: WaterRegistryRecord) {
+  if (!hasText(record.third_party_disconnection_note)) return ''
+  if (connectionActFilled(record)) return ''
+  return 'rounded bg-red-50 ring-1 ring-inset ring-red-100'
 }
 
 function EditableCell({
@@ -429,7 +444,7 @@ function ThirdPartyDisconnectionCell({
   disabled?: boolean
 }) {
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 p-0.5 ${thirdPartyDisconnectionCellClass(record)}`}>
       <YesNoCell
         record={record}
         field="third_party_disconnection"
@@ -440,6 +455,36 @@ function ThirdPartyDisconnectionCell({
         <EditableCell
           record={record}
           field="third_party_disconnection_note"
+          onSave={onSave}
+          disabled={disabled}
+          emptyText="Примечание"
+        />
+      </div>
+    </div>
+  )
+}
+
+function ConnectionActCell({
+  record,
+  onSave,
+  disabled,
+}: {
+  record: WaterRegistryRecord
+  onSave: (id: number, field: keyof WaterRegistryRecord, value: string) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="space-y-1 p-0.5">
+      <YesNoCell
+        record={record}
+        field="connection_act"
+        onSave={onSave}
+        disabled={disabled}
+      />
+      <div className="border-t border-gray-100 pt-1 text-xs">
+        <EditableCell
+          record={record}
+          field="connection_act_note"
           onSave={onSave}
           disabled={disabled}
           emptyText="Примечание"
@@ -1246,6 +1291,12 @@ export default function WaterRegistry() {
                         />
                       ) : key === 'third_party_disconnection' ? (
                         <ThirdPartyDisconnectionCell
+                          record={record}
+                          disabled={updateMutation.isPending || paymentOnly}
+                          onSave={(id, field, value) => updateMutation.mutate({ id, field, value })}
+                        />
+                      ) : key === 'connection_act' ? (
+                        <ConnectionActCell
                           record={record}
                           disabled={updateMutation.isPending || paymentOnly}
                           onSave={(id, field, value) => updateMutation.mutate({ id, field, value })}
