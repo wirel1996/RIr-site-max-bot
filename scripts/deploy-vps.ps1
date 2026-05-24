@@ -59,6 +59,7 @@ $remote = @"
 set -e
 cd /opt/max_bot
 tar -xzf /root/code-deploy.tgz
+sed -i 's/\r$//' deploy/linux/deploy.sh
 chmod +x deploy/linux/deploy.sh
 SKIP_TESTS=$skipTestsFlag bash deploy/linux/deploy.sh
 "@ -replace "`r", ''
