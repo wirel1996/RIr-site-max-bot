@@ -15,6 +15,9 @@ storage/backups/
 
 # Migration pack (secrets + DB)
 migrate-pack.zip
+code-pack.tgz
+code-deploy.tgz
+.env.deploy
 
 # Logs and temp
 log/

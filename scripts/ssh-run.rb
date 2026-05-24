@@ -9,8 +9,10 @@ password = ENV.fetch('DEPLOY_PASSWORD')
 command = ARGV.join(' ')
 abort 'Usage: ssh-run.rb <command>' if command.empty?
 
+exit_status = 1
 Net::SSH.start(host, user, password: password, non_interactive: true, verify_host_key: :never) do |ssh|
-  ssh.exec!(command) do |_ch, stream, data|
+  exit_status = ssh.exec!(command) do |_ch, stream, data|
     print data if data
   end
 end
+exit exit_status if exit_status && exit_status != 0
