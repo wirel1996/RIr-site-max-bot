@@ -1,0 +1,63 @@
+# GitLab CI: tests on push/MR, deploy to VPS on main.
+# Variables (Settings → CI/CD → Variables, Protected + Masked):
+#   DEPLOY_HOST   — e.g. 95.170.124.182
+#   DEPLOY_USER   — e.g. root (optional, default root)
+#   SSH_PRIVATE_KEY — deploy key (ed25519), private part, multiline File variable
+# Setup: docs/gitlab-ci.md
+
+stages:
+  - test
+  - deploy
+
+default:
+  image: ruby:3.3-bookworm
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq curl git
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y -qq nodejs
+    - gem install bundler --no-document
+    - bundle config set --local path vendor/bundle
+    - bundle install --jobs 4
+  cache:
+    key: bundle-${CI_COMMIT_REF_SLUG}
+    paths:
+      - vendor/bundle
+      - web-frontend/node_modules
+
+test:
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - bundle exec rspec
+    - cd web-frontend && npm ci && npm run build
+
+deploy_production:
+  stage: deploy
+  image: alpine:3.20
+  needs: [test]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    DEPLOY_USER: root
+  before_script:
+    - apk add --no-cache openssh-client bash tar gzip
+    - eval "$(ssh-agent -s)"
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+  script:
+    - git archive --format=tar.gz -o /tmp/code-deploy.tgz HEAD
+    - scp -o BatchMode=yes /tmp/code-deploy.tgz "${DEPLOY_USER}@${DEPLOY_HOST}:/root/code-deploy.tgz"
+    - |
+      ssh -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<'REMOTE'
+      set -euo pipefail
+      cd /opt/max_bot
+      tar -xzf /root/code-deploy.tgz
+      sed -i 's/\r$//' deploy/linux/deploy.sh
+      chmod +x deploy/linux/deploy.sh
+      SKIP_TESTS=1 bash deploy/linux/deploy.sh
+      REMOTE
