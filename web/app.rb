@@ -471,6 +471,8 @@ class ContactsWeb < Sinatra::Base
       reset_link = ArshinService.shorten_url(reset_link)
       begin
         PasswordResetMailer.send_reset(email: data[:email], login: data[:login], reset_link: reset_link)
+      rescue MailDelivery::Error => e
+        halt 502, json_error("Не удалось отправить письмо: #{e.message}", 502)
       rescue Net::SMTPFatalError => e
         halt 502, json_error("Почтовый сервер отклонил письмо: #{e.message}", 502)
       rescue Net::SMTPAuthenticationError
@@ -478,7 +480,7 @@ class ContactsWeb < Sinatra::Base
       rescue Net::SMTPServerBusy
         halt 503, json_error('Почтовый сервер временно недоступен, попробуйте позже', 503)
       rescue StandardError => e
-        halt 502, json_error("Не удалось отправить письмо: #{e.class}", 502)
+        halt 502, json_error("Не удалось отправить письмо: #{e.message}", 502)
       end
     end
     json_response(ok: true)

@@ -59,7 +59,7 @@ module DbBackupService
     return { ok: false, error: 'backup email disabled' } unless enabled?
     to = email_to
     return { ok: false, error: 'backup email is empty' } if to.empty?
-    return { ok: false, error: 'smtp not configured' } unless BackupMailer.configured?
+    return { ok: false, error: 'mail not configured' } unless BackupMailer.configured?
 
     if result[:ok]
       BackupMailer.send_backup(
