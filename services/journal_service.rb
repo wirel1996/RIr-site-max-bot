@@ -559,6 +559,18 @@ module JournalService
     read_week_from_db(monday_iso)
   end
 
+  def week_status(monday_iso)
+    monday = Date.iso8601(monday_iso.to_s)
+    raise "monday_iso must be a Monday, got #{monday.wday}" if monday.wday != 1
+
+    row = JournalDB.with_db { |db| JournalDB.week_status(db, monday.iso8601) }
+    {
+      week_start: row['week_start'].to_s,
+      cells_revision: row['cells_revision'].to_i,
+      latest_event_id: row['latest_event_id'].to_i
+    }
+  end
+
   def read_week_from_db(monday_iso)
     monday = Date.iso8601(monday_iso)
     raise "monday_iso must be a Monday, got #{monday.wday}" if monday.wday != 1

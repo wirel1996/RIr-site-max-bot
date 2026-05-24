@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'date'
 require 'sqlite3'
 require 'fileutils'
 
@@ -142,6 +143,25 @@ module JournalDB
 
   def week_starts(db)
     db.execute('SELECT DISTINCT week_start FROM journal_cells ORDER BY week_start').map { |r| r['week_start'] }
+  end
+
+  def week_status(db, week_start)
+    ws = week_start.to_s
+    cells_revision = db.get_first_value(
+      'SELECT COALESCE(MAX(updated_at), 0) FROM journal_cells WHERE week_start = ?',
+      [ws]
+    ).to_i
+    monday = Date.iso8601(ws)
+    week_end = (monday + 6).iso8601
+    latest_event_id = db.get_first_value(
+      'SELECT COALESCE(MAX(id), 0) FROM journal_events WHERE date_iso >= ? AND date_iso <= ?',
+      [ws, week_end]
+    ).to_i
+    {
+      'week_start' => ws,
+      'cells_revision' => cells_revision,
+      'latest_event_id' => latest_event_id
+    }
   end
 
   def search(db, query, limit:)

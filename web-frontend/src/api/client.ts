@@ -9,6 +9,12 @@ export type ApiError = {
 
 const PUBLIC_PATHS = ['/auth/login']
 
+function clientPageHeader(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  const page = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  return page ? { 'X-Client-Page': page } : {}
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -19,6 +25,7 @@ async function request<T>(
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       Accept: 'application/json',
+      ...clientPageHeader(),
       ...(init?.headers ?? {}),
     },
     credentials: 'same-origin',

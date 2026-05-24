@@ -29,6 +29,12 @@ export type JournalWeekData = {
   colors: Record<string, string>
 }
 
+export type JournalWeekStatus = {
+  week_start: string
+  cells_revision: number
+  latest_event_id: number
+}
+
 export type CellColor = {
   date: string
   time: string
@@ -38,8 +44,10 @@ export type CellColor = {
 
 export const journalApi = {
   weeks: () => api.get<{ weeks: JournalWeek[] }>('/journal/weeks'),
+  weekStatus: (start: string) =>
+    api.get<JournalWeekStatus>(`/journal/week-status?start=${encodeURIComponent(start)}`),
   week: (start: string) =>
-    api.get<JournalWeekData>(`/journal/week?start=${start}`),
+    api.get<JournalWeekData>(`/journal/week?start=${encodeURIComponent(start)}`),
   search: (q: string, limit = 50) =>
     api.get<{ results: Array<{ week_start: string; week_label: string; date: string; time: string; person: string; value: string }> }>(
       `/journal/search?q=${encodeURIComponent(q)}&limit=${limit}`,

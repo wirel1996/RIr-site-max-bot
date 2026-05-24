@@ -257,6 +257,10 @@ class ContactsWeb < Sinatra::Base
 
   # ???????? ????? (??? ??????): ?????? ????? ? health.
   AUTH_FREE_PATHS = %w[/api/auth/login /api/auth/forgot /api/auth/reset-password /api/health].freeze
+  ACTIVITY_SKIP_PATHS = [
+    %r{\A/api/auth/ping\z},
+    %r{\A/api/journal/week-status\z}
+  ].freeze
 
   before '/api/*' do
     request.body.rewind if request.body.respond_to?(:rewind)
@@ -268,6 +272,19 @@ class ContactsWeb < Sinatra::Base
 
     require_auth!
     halt 403, json_error('water access only', 403) if UsersService.water_payment_only?(current_user) && !water_payment_api_allowed_path?
+  end
+
+  before '/api/*' do
+    next if AUTH_FREE_PATHS.include?(request.path)
+    next if request.path.match?(%r{\A/api/reset-link/[^/]+\z})
+    next if ACTIVITY_SKIP_PATHS.any? { |pattern| request.path.match?(pattern) }
+
+    user = current_user
+    next unless user
+
+    page = request.get_header('HTTP_X_CLIENT_PAGE').to_s.strip
+    page = nil if page.empty?
+    UsersService.mark_activity(user[:login], page: page)
   end
 
   before '/api/billing/*' do
@@ -299,7 +316,6 @@ class ContactsWeb < Sinatra::Base
     user = current_user
     halt 401, json_error('not authenticated', 401) unless user
 
-    UsersService.mark_activity(user[:login], page: request.path)
     json_response(user: UsersService.public_user(UsersService.find(user[:login]) || user))
   end
 
@@ -307,7 +323,7 @@ class ContactsWeb < Sinatra::Base
     require_auth!
     body = parse_json_body
     page = body['page'].to_s
-    user = UsersService.mark_activity(current_user[:login], page: page)
+    user = UsersService.mark_activity(current_user[:login], page: page, force: true)
     json_response(ok: true, user: user || current_user)
   end
 
@@ -1004,6 +1020,19 @@ class ContactsWeb < Sinatra::Base
 
     JournalService.cleanup_old_colors(older_than_days: 60)
     json_response(weeks: JournalService.weeks)
+  end
+
+  get '/api/journal/week-status' do
+    halt 503, json_error('journal not configured', 503) unless JournalService.api_available?
+
+    start_iso = params[:start].to_s
+    halt 400, json_error('start is required (YYYY-MM-DD Monday)', 400) if start_iso.empty?
+
+    begin
+      json_response(JournalService.week_status(start_iso))
+    rescue StandardError => e
+      json_error(e.message, 400)
+    end
   end
 
   get '/api/journal/week' do

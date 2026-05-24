@@ -26,6 +26,8 @@ module UsersService
   BOOTSTRAP_ADMIN_LOGINS = ['голоманский'].freeze
 
   @mutex = Mutex.new
+  @activity_throttle = {}
+  ACTIVITY_MIN_INTERVAL = 60 # сек между записями last_seen без смены страницы
 
   def list
     load_all.map { |u| public_user(u) }
@@ -231,7 +233,7 @@ module UsersService
     end
   end
 
-  def mark_activity(login, page: nil)
+  def mark_activity(login, page: nil, force: false)
     @mutex.synchronize do
       users = load_all_unlocked
       norm = normalize(login)
@@ -239,14 +241,23 @@ module UsersService
       return nil unless existing
 
       now = Time.now.to_i
-      existing[:last_seen_at] = now
+      clean_page = nil
       unless page.nil?
         clean_page = page.to_s.strip
         clean_page = clean_page[0, 120]
-        existing[:last_seen_page] = clean_page
+        clean_page = nil if clean_page.empty?
       end
+      page_changed = clean_page && clean_page != existing[:last_seen_page].to_s
+      last_write = @activity_throttle[norm].to_i
+      unless force || page_changed || last_write.zero? || (now - last_write) >= ACTIVITY_MIN_INTERVAL
+        return public_user(existing)
+      end
+
+      existing[:last_seen_at] = now
+      existing[:last_seen_page] = clean_page if clean_page
       existing[:updated_at] ||= now
       save_all(users)
+      @activity_throttle[norm] = now
       public_user(existing)
     end
   end

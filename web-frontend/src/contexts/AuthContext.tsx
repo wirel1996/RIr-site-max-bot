@@ -75,7 +75,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     sendPing()
-    const id = window.setInterval(sendPing, 60_000)
     const onVisible = () => {
       if (document.visibilityState === 'visible') sendPing()
     }
@@ -83,7 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisible)
 
     return () => {
-      window.clearInterval(id)
       window.removeEventListener('focus', sendPing)
       document.removeEventListener('visibilitychange', onVisible)
     }

@@ -25,7 +25,7 @@
 	}
 
 	# Шум: keepalive сессии, статика — не пишем в access-лог.
-	@log_skip_ping path /api/auth/ping /favicon.ico /manifest.json /robots.txt
+	@log_skip_ping path /api/auth/ping /api/journal/week-status /favicon.ico /manifest.json /robots.txt
 	@log_skip_static path_regexp \.(js|css|ico|png|jpe?g|gif|svg|woff2?|ttf|map)$
 
 	log_skip @log_skip_ping

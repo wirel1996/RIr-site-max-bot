@@ -232,9 +232,46 @@ export default function Journal() {
     placeholderData: keepPreviousData,
     staleTime: 0,
     refetchOnWindowFocus: true,
+  })
+
+  const weekStatusQ = useQuery({
+    queryKey: ['journal', 'week-status', activeWeek],
+    queryFn: () => journalApi.weekStatus(activeWeek!),
+    enabled: !!activeWeek,
     refetchInterval: JOURNAL_LIVE_REFRESH_MS,
     refetchIntervalInBackground: false,
   })
+
+  const weekRevisionRef = useRef<{ cells_revision: number; latest_event_id: number } | null>(null)
+
+  useEffect(() => {
+    weekRevisionRef.current = null
+  }, [activeWeek])
+
+  useEffect(() => {
+    const status = weekStatusQ.data
+    if (!status || !activeWeek) return
+
+    const prev = weekRevisionRef.current
+    if (!prev) {
+      weekRevisionRef.current = {
+        cells_revision: status.cells_revision,
+        latest_event_id: status.latest_event_id,
+      }
+      return
+    }
+
+    if (
+      prev.cells_revision !== status.cells_revision
+      || prev.latest_event_id !== status.latest_event_id
+    ) {
+      weekRevisionRef.current = {
+        cells_revision: status.cells_revision,
+        latest_event_id: status.latest_event_id,
+      }
+      void queryClient.invalidateQueries({ queryKey: ['journal', 'week', activeWeek] })
+    }
+  }, [weekStatusQ.data, activeWeek, queryClient])
   useEffect(() => {
     if (weekDataQ.data?.colors) {
       setCellColors(weekDataQ.data.colors)
@@ -269,7 +306,11 @@ export default function Journal() {
       window.alert(msg)
     },
     onSettled: (_data, error) => {
-      if (error) queryClient.invalidateQueries({ queryKey: ['journal', 'week', activeWeek] })
+      if (error) {
+        void queryClient.invalidateQueries({ queryKey: ['journal', 'week', activeWeek] })
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ['journal', 'week-status', activeWeek] })
+      }
     },
   })
 
@@ -277,7 +318,8 @@ export default function Journal() {
     mutationFn: (cells: Array<{ date: string; time: string; person: string; color: string }>) =>
       journalApi.writeCellColors(cells),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['journal', 'week', activeWeek] })
+      void queryClient.invalidateQueries({ queryKey: ['journal', 'week', activeWeek] })
+      void queryClient.invalidateQueries({ queryKey: ['journal', 'week-status', activeWeek] })
     },
   })
 
