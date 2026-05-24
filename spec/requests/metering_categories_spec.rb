@@ -81,6 +81,17 @@ RSpec.describe 'Metering categories API', type: :request do
       delete '/api/metering/categories/gspo'
       expect(last_response.status).to eq(400)
     end
+
+    it 'does not resurrect a deleted default category on next overview' do
+      login_as('rspec_admin')
+      delete '/api/metering/categories/embedded'
+      expect(last_response.status).to eq(200)
+
+      get '/api/metering/overview'
+      expect(last_response.status).to eq(200)
+      keys = json_body['categories'].map { |c| c['key'] }
+      expect(keys).not_to include('embedded')
+    end
   end
 
   describe 'POST /api/metering/:category' do

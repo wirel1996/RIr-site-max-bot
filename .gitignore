@@ -10,6 +10,9 @@ data/
 caddy/data/
 caddy/cert.reg.ru.bak/
 
+# DB backups (local only)
+storage/backups/
+
 # Logs and temp
 log/
 tmp/

@@ -19,6 +19,8 @@ module UuteDB
     'bu2'      => 'БУ-2'
   }.freeze
 
+  CATEGORY_DEFAULTS_SEEDED_KEY = 'uute_categories_defaults_seeded'
+
   @db_mutex = Mutex.new
 
   def db_path
@@ -207,6 +209,11 @@ module UuteDB
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS uute_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+      );
     SQL
 
     seed_uute_categories(db)
@@ -381,21 +388,18 @@ module UuteDB
 
   def seed_uute_categories(db)
     now = Time.now.to_i
-    CATEGORIES.each_with_index do |key, index|
-      label = CATEGORY_LABELS[key] || key
-      row = db.get_first_row('SELECT key FROM uute_categories WHERE key = ?', [key])
-      system = key == 'gspo' ? 1 : 0
-      if row
-        db.execute(
-          'UPDATE uute_categories SET label = ?, sort_order = ?, updated_at = ? WHERE key = ?',
-          [label, index, now, key]
-        )
-      else
-        db.execute(
-          'INSERT INTO uute_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)',
-          [key, label, index, system, now, now]
-        )
+    unless uute_category_defaults_seeded?(db)
+      if db.get_first_value('SELECT COUNT(*) FROM uute_categories').to_i.zero?
+        CATEGORIES.each_with_index do |key, index|
+          label = CATEGORY_LABELS[key] || key
+          system = key == 'gspo' ? 1 : 0
+          db.execute(
+            'INSERT INTO uute_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)',
+            [key, label, index, system, now, now]
+          )
+        end
       end
+      uute_mark_category_defaults_seeded(db)
     end
 
     db.execute('SELECT DISTINCT category FROM uute_objects WHERE COALESCE(TRIM(category), \'\') <> \'\'').each do |row|
@@ -408,7 +412,21 @@ module UuteDB
       )
     end
   end
+
+  def uute_category_defaults_seeded?(db)
+    row = db.get_first_row('SELECT value FROM uute_meta WHERE key = ?', [CATEGORY_DEFAULTS_SEEDED_KEY])
+    row && row['value'].to_s == '1'
+  end
+
+  def uute_mark_category_defaults_seeded(db)
+    db.execute(
+      'INSERT INTO uute_meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      [CATEGORY_DEFAULTS_SEEDED_KEY, '1']
+    )
+  end
   private_class_method :seed_uute_categories
+  private_class_method :uute_category_defaults_seeded?
+  private_class_method :uute_mark_category_defaults_seeded
 
   def categories(db)
     db.execute('SELECT key, label, sort_order, system, created_at, updated_at FROM uute_categories ORDER BY sort_order, label, key')

@@ -21,6 +21,8 @@ module ContactsDB
 
   DEFAULT_CATEGORY_ORDER = CATEGORIES.each_with_index.to_h.freeze
 
+  CATEGORY_DEFAULTS_SEEDED_KEY = 'contact_categories_defaults_seeded'
+
   @db_mutex = Mutex.new
 
   def db_path
@@ -154,22 +156,20 @@ module ContactsDB
   end
 
   def seed_contact_categories(db)
+    return if get_meta(db, CATEGORY_DEFAULTS_SEEDED_KEY).to_s == '1'
+
     now = Time.now.to_i
-    CATEGORIES.each_with_index do |key, index|
-      label = CATEGORY_LABELS[key] || key
-      row = db.get_first_row('SELECT key FROM contact_categories WHERE key = ?', [key])
-      if row
+    if db.get_first_value('SELECT COUNT(*) FROM contact_categories').to_i.zero?
+      CATEGORIES.each_with_index do |key, index|
+        label = CATEGORY_LABELS[key] || key
+        system = key == 'gspo' ? 1 : 0
         db.execute(
-          'UPDATE contact_categories SET label = ?, sort_order = ?, system = 1, updated_at = ? WHERE key = ?',
-          [label, index, now, key]
-        )
-      else
-        db.execute(
-          'INSERT INTO contact_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, 1, ?, ?)',
-          [key, label, index, now, now]
+          'INSERT INTO contact_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)',
+          [key, label, index, system, now, now]
         )
       end
     end
+    set_meta(db, CATEGORY_DEFAULTS_SEEDED_KEY, '1')
   end
   private_class_method :seed_contact_categories
 
