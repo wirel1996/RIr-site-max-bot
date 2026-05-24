@@ -205,6 +205,10 @@ function thirdPartyDisconnectionCellClass(record: WaterRegistryRecord) {
   return 'rounded bg-red-50 ring-1 ring-inset ring-red-100'
 }
 
+function waterPointFilterValue(record: WaterRegistryRecord) {
+  return (record.actual_connection_point || record.point_number || '').trim()
+}
+
 function EditableCell({
   record,
   field,
@@ -658,6 +662,13 @@ export default function WaterRegistry() {
       dir: sort === 'metering_presence' && dir === 'asc' ? 'desc' : 'asc',
       page: 0,
     })
+  }
+
+  const applyPointFilter = (value: string) => {
+    const next = value.trim()
+    if (!next) return
+    setPoint(next)
+    updateParams({ point: next, page: 0 })
   }
 
   const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -1315,9 +1326,24 @@ export default function WaterRegistry() {
               </tr>
             </thead>
             <tbody>
-              {data.records.map((record) => (
+              {data.records.map((record) => {
+                const pointLabel = waterPointFilterValue(record)
+                return (
                 <tr key={record.id} className="border-t hover:bg-gray-50">
-                  <td className="break-words px-1.5 py-1.5 font-medium">{record.actual_connection_point || record.point_number || '—'}</td>
+                  <td className="break-words px-1.5 py-1.5 font-medium">
+                    {pointLabel ? (
+                      <button
+                        type="button"
+                        onClick={() => applyPointFilter(pointLabel)}
+                        className="text-left text-blue-700 hover:underline"
+                        title="Фильтровать по этой точке"
+                      >
+                        {pointLabel}
+                      </button>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className="break-words px-2 py-1.5">
                     {paymentOnly ? (
                       <span className="block break-words">{record.gspo_name || '—'}</span>
@@ -1388,7 +1414,8 @@ export default function WaterRegistry() {
                     </td>
                   ))}
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
