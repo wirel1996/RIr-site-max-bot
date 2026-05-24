@@ -1438,17 +1438,6 @@ class ContactsWeb < Sinatra::Base
     halt 400, json_error(e.message, 400)
   end
 
-  post '/api/metering/:category/compare-identifiers' do |cat|
-    require_billing_access!
-    file = params[:file]
-    halt 400, json_error('file required', 400) unless file && file[:tempfile]
-
-    result = UuteService.compare_identifiers(file[:tempfile].path, category: cat)
-    json_response(result)
-  rescue ArgumentError => e
-    halt 400, json_error(e.message, 400)
-  end
-
   # ---- Water registry (must be before generic :category routes) ----
   get '/api/metering/water' do
     page = [params[:page].to_i, 0].max

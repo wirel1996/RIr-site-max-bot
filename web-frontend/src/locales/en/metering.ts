@@ -13,7 +13,6 @@ export const meteringEn = {
     total: (n: number) => `Total objects: ${n}`,
     fallbackTotal: 'UUTE objects',
     refreshing: ' · refreshing...',
-    lastImport: 'Last import',
     searchPlaceholder: 'Search by name, address, contract, meter...',
     export: 'Export objects',
     upload: 'Upload Excel',

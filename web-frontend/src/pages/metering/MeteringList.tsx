@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { meteringApi, type CreateMeteringPayload, type MeteringCompareIdentifiersResult } from '../../api/metering'
+import { meteringApi, type CreateMeteringPayload } from '../../api/metering'
 import { objectsApi, type ObjectRecord } from '../../api/objects'
 import { useAuth } from '../../contexts/AuthContext'
 import { meteringFieldLabel } from './meteringFieldLabels'
@@ -34,8 +34,6 @@ export default function MeteringList() {
   const [message, setMessage] = useState('')
   const [importDetailsOpen, setImportDetailsOpen] = useState(false)
   const [importDetails, setImportDetails] = useState<Array<{ id: number; source_row: number; name: string | null; address: string | null; identifier: string | null; changed_fields: string[]; changes?: Record<string, { before: string; after: string }> }>>([])
-  const [compareOpen, setCompareOpen] = useState(false)
-  const [compareResult, setCompareResult] = useState<MeteringCompareIdentifiersResult | null>(null)
   const page = Number(searchParams.get('page') ?? 0)
   const queryClient = useQueryClient()
   const { user } = useAuth()
@@ -54,18 +52,6 @@ export default function MeteringList() {
     queryKey: ['metering', cat, page, query.trim()],
     queryFn: () => meteringApi.list(cat, page, query),
     placeholderData: (previousData) => previousData,
-  })
-
-  const compareMutation = useMutation({
-    mutationFn: (file: File) => meteringApi.compareIdentifiers(cat, file),
-    onSuccess: (result) => {
-      setCompareResult(result)
-      setCompareOpen(true)
-      setMessage(
-        `Сверка: совпало ${result.matched_count}, только в файле ${result.in_file_only.length}, только в БД ${result.in_db_only.length}, дубликаты ${result.duplicates_in_file.length}.`,
-      )
-    },
-    onError: (err: { message?: string }) => setMessage(err.message || 'Не удалось сверить идентификаторы.'),
   })
 
   const importMutation = useMutation({
@@ -111,7 +97,6 @@ export default function MeteringList() {
         <div>
           <h1 className="text-2xl font-bold">{categoryLabel}</h1>
           <p className="text-sm text-gray-600">{data ? `Всего объектов: ${data.total}` : 'Объекты УУТЭ'}{isFetching ? ' · обновляю...' : ''}</p>
-          {data?.last_import && <p className="text-xs text-gray-500">Последний импорт: {new Date(data.last_import.imported_at * 1000).toLocaleString('ru-RU')}</p>}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Поиск по названию, адресу, договору, прибору..." className="w-full rounded border bg-white px-3 py-2 text-sm sm:w-96" />
@@ -119,13 +104,9 @@ export default function MeteringList() {
           {(user?.role === 'admin' || user?.role === 'full') && (
             <>
               <button type="button" onClick={() => setShowCreate(true)} className="inline-flex items-center justify-center rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">+ Создать прибор</button>
-              <label className="inline-flex cursor-pointer items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                {compareMutation.isPending ? 'Сверка...' : 'Сверить идентификаторы'}
-                <input type="file" accept=".xls,.xlsx" className="hidden" disabled={compareMutation.isPending || importMutation.isPending} onChange={(event) => { const file = event.target.files?.[0]; if (file) compareMutation.mutate(file); event.currentTarget.value = '' }} />
-              </label>
               <label className="inline-flex cursor-pointer items-center justify-center rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 hover:bg-blue-100">
                 {importMutation.isPending ? 'Актуализация...' : 'Актуализировать из Excel'}
-                <input type="file" accept=".xls,.xlsx" className="hidden" disabled={compareMutation.isPending || importMutation.isPending} onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.currentTarget.value = '' }} />
+                <input type="file" accept=".xls,.xlsx" className="hidden" disabled={importMutation.isPending} onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.currentTarget.value = '' }} />
               </label>
             </>
           )}
@@ -137,35 +118,6 @@ export default function MeteringList() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>{message}</span>
             {importDetails.length > 0 && <button type="button" onClick={() => setImportDetailsOpen(true)} className="rounded border border-blue-300 bg-white px-2 py-1 text-xs text-blue-700 hover:bg-blue-50">Показать изменения</button>}
-          </div>
-        </div>
-      )}
-
-      {compareOpen && compareResult && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-3xl rounded-lg bg-white p-4 shadow-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">Сверка идентификаторов</h2>
-              <button type="button" onClick={() => setCompareOpen(false)} className="rounded border bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">Закрыть</button>
-            </div>
-            <p className="mb-3 text-sm text-gray-700">
-              Совпало {compareResult.matched_count}, только в Excel {compareResult.in_file_only.length}, только в БД {compareResult.in_db_only.length}, дубликаты {compareResult.duplicates_in_file.length}.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3 max-h-[50vh] overflow-auto text-xs">
-              <div>
-                <h3 className="font-medium mb-1">Только в Excel</h3>
-                {compareResult.in_file_only.length > 0 && <p className="mb-1 text-gray-500">При актуализации эти строки не изменяются.</p>}
-                <ul className="text-gray-700">{compareResult.in_file_only.length === 0 ? <li>—</li> : compareResult.in_file_only.map((id) => <li key={id}>{id}</li>)}</ul>
-              </div>
-              <div>
-                <h3 className="font-medium mb-1">Только в БД</h3>
-                <ul className="text-gray-700">{compareResult.in_db_only.length === 0 ? <li>—</li> : compareResult.in_db_only.map((id) => <li key={id}>{id}</li>)}</ul>
-              </div>
-              <div>
-                <h3 className="font-medium mb-1">Дубликаты в файле</h3>
-                <ul className="text-gray-700">{compareResult.duplicates_in_file.length === 0 ? <li>—</li> : compareResult.duplicates_in_file.map((id) => <li key={id}>{id}</li>)}</ul>
-              </div>
-            </div>
           </div>
         </div>
       )}

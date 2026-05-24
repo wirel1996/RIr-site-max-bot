@@ -207,16 +207,6 @@ export type MeteringImportResult = {
   }>
 }
 
-export type MeteringCompareIdentifiersResult = {
-  matched_count: number
-  file_count: number
-  db_count: number
-  in_file_only: string[]
-  in_db_only: string[]
-  duplicates_in_file: string[]
-  warnings?: string[]
-}
-
 export type WaterRegistryRecord = {
   id: number
   object_id: number | null
@@ -451,12 +441,6 @@ export const meteringApi = {
     return api.upload<MeteringImportResult>(`/metering/${category}/import`, formData)
   },
   importGspo: (file: File) => meteringApi.importMetering('gspo', file),
-  compareIdentifiers: (category: string, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return api.upload<MeteringCompareIdentifiersResult>(`/metering/${category}/compare-identifiers`, formData)
-  },
-  compareGspoIdentifiers: (file: File) => meteringApi.compareIdentifiers('gspo', file),
   listWater: (
     page = 0,
     query = '',
