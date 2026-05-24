@@ -1,5 +1,5 @@
 ﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { contactsApi, type Contact, type ContactCategory } from '../../api/contacts'
 import { meteringApi, type WaterRegistryRecord } from '../../api/metering'
@@ -510,6 +510,7 @@ export default function WaterRegistry() {
   const [phoneogramOpen, setPhoneogramOpen] = useState(false)
   const [phoneogramFrom, setPhoneogramFrom] = useState('')
   const [phoneogramTo, setPhoneogramTo] = useState('')
+  const [phoneogramNumber, setPhoneogramNumber] = useState('')
   const [actionsOpen, setActionsOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -549,6 +550,18 @@ export default function WaterRegistry() {
 
   const contactOptions = contactSearchQuery.data?.records ?? []
   const selectedContact = contactOptions.find((contact) => String(contact.id) === selectedContactId)
+
+  const phoneogramHistoryQuery = useQuery({
+    queryKey: ['metering', 'water', 'phoneogram-history'],
+    queryFn: () => meteringApi.waterPhoneogramHistory(),
+    enabled: phoneogramOpen,
+  })
+
+  useEffect(() => {
+    if (!phoneogramOpen) return
+    const last = phoneogramHistoryQuery.data?.last_export
+    if (last?.phoneogram_number) setPhoneogramNumber(last.phoneogram_number)
+  }, [phoneogramOpen, phoneogramHistoryQuery.data?.last_export?.phoneogram_number])
 
   const importDisconnectionsMutation = useMutation({
     mutationFn: (file: File) => meteringApi.importWaterDisconnections(file),
@@ -648,6 +661,12 @@ export default function WaterRegistry() {
   }
 
   const todayIso = () => new Date().toISOString().slice(0, 10)
+  const todayRu = () => {
+    const d = new Date()
+    const dd = String(d.getDate()).padStart(2, '0')
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    return `${dd}.${mm}.${d.getFullYear()}`
+  }
 
   const submitCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -791,6 +810,7 @@ export default function WaterRegistry() {
                       const today = todayIso()
                       setPhoneogramFrom(paymentFrom.trim() || today)
                       setPhoneogramTo(paymentTo.trim() || paymentFrom.trim() || today)
+                      setPhoneogramNumber('')
                       setPhoneogramOpen(true)
                       setActionsOpen(false)
                     }}
@@ -1045,7 +1065,29 @@ export default function WaterRegistry() {
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-xl">
             <h2 className="mb-3 text-base font-semibold">Выгрузка телефонограммы</h2>
+            {phoneogramHistoryQuery.data?.last_export?.payment_to_ru && (
+              <p className="mb-3 rounded border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                В прошлый раз выгружали до {phoneogramHistoryQuery.data.last_export.payment_to_ru}
+                {phoneogramHistoryQuery.data.last_export.phoneogram_number
+                  ? ` (№ ${phoneogramHistoryQuery.data.last_export.phoneogram_number})`
+                  : ''}
+              </p>
+            )}
             <div className="space-y-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-gray-700">Номер телефонограммы</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={phoneogramNumber}
+                  onChange={(event) => setPhoneogramNumber(event.target.value)}
+                  placeholder="Например, 42"
+                  className="w-full rounded border bg-white px-3 py-2 text-sm"
+                />
+              </label>
+              <p className="text-xs text-gray-500">
+                В файле: «Телефонограмма № {phoneogramNumber.trim() || '…'} от {todayRu()}»
+              </p>
               <label className="block text-sm">
                 <span className="mb-1 block text-gray-700">Дата с</span>
                 <input
@@ -1085,13 +1127,27 @@ export default function WaterRegistry() {
               >
                 Отмена
               </button>
-              <a
-                href={meteringApi.waterPhoneogramUrl(phoneogramFrom, phoneogramTo, phoneogramSigner)}
-                className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-                onClick={() => setPhoneogramOpen(false)}
+              <button
+                type="button"
+                disabled={!phoneogramNumber.trim()}
+                className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => {
+                  if (!phoneogramNumber.trim()) return
+                  window.location.assign(
+                    meteringApi.waterPhoneogramUrl(
+                      phoneogramFrom,
+                      phoneogramTo,
+                      phoneogramSigner,
+                      phoneogramNumber,
+                      todayRu(),
+                    ),
+                  )
+                  setPhoneogramOpen(false)
+                  void queryClient.invalidateQueries({ queryKey: ['metering', 'water', 'phoneogram-history'] })
+                }}
               >
                 Скачать
-              </a>
+              </button>
             </div>
           </div>
         </div>

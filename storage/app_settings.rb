@@ -6,7 +6,13 @@ require 'fileutils'
 module AppSettings
   module_function
 
-  FILE = File.expand_path('../storage/app_settings.json', __dir__)
+  def settings_file_path
+    raw = ENV['APP_SETTINGS_PATH'].to_s.strip
+    path = raw.empty? ? File.expand_path('../storage/app_settings.json', __dir__) : raw
+    File.expand_path(path)
+  end
+
+  FILE = settings_file_path
   DEFAULTS = {
     'water_payment_notify_user_id' => '117733220',
     'water_payment_notify_user_ids' => ['117733220'],
@@ -14,7 +20,8 @@ module AppSettings
     'db_backup_enabled' => false,
     'db_backup_email' => '',
     'db_backup_daily_time' => '02:00',
-    'db_backup_notify_user_id' => ''
+    'db_backup_notify_user_id' => '',
+    'object_switch_act_next_number' => 1
   }.freeze
 
   @mutex = Mutex.new
@@ -37,19 +44,21 @@ module AppSettings
   end
 
   def read_unlocked
-    return {} unless File.exist?(FILE)
+    path = settings_file_path
+    return {} unless File.exist?(path)
 
-    JSON.parse(File.read(FILE, encoding: 'UTF-8'))
+    JSON.parse(File.read(path, encoding: 'UTF-8'))
   rescue StandardError
     {}
   end
   private_class_method :read_unlocked
 
   def write_unlocked(data)
-    FileUtils.mkdir_p(File.dirname(FILE))
-    tmp = "#{FILE}.tmp"
+    path = settings_file_path
+    FileUtils.mkdir_p(File.dirname(path))
+    tmp = "#{path}.tmp"
     File.write(tmp, JSON.pretty_generate(data), encoding: 'UTF-8')
-    File.rename(tmp, FILE)
+    File.rename(tmp, path)
   end
   private_class_method :write_unlocked
 end

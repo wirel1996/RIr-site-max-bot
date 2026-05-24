@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { contactsApi, type Contact, type ContactUpdatePayload } from '../../api/contacts'
+import { useAuth } from '../../contexts/AuthContext'
 import { meteringApi } from '../../api/metering'
 import { shortLabel } from './shortLabel'
-import { categoryLabel, editableFieldsForCategory } from './contactDisplay'
+import { categoryLabel, contactUpdatePayloadForCategory, editableFieldsForCategory } from './contactDisplay'
 
 type FieldKind = 'text' | 'phone'
 type Field = [string, string | null, FieldKind?]
@@ -32,6 +33,7 @@ function fieldsFor(record: Contact): Field[] {
         ['Почтовый адрес', record.postal_address],
         ['Наличие приборов учета', record.metering_presence],
         ['Отключено', record.disconnected],
+        ['Дата отключения/включения', record.disconnected_date],
         ['Синхронизация', record.sync_status === 'not_matched' ? 'ошибка' : null],
         ['Комментарий синхронизации', record.sync_note],
         ['Идентификатор', record.identifier],
@@ -53,6 +55,7 @@ function fieldsFor(record: Contact): Field[] {
 }
 
 export default function ContactsDetail() {
+  const { canDelete } = useAuth()
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
   const navigate = useNavigate()
@@ -125,6 +128,7 @@ export default function ContactsDetail() {
       identifier: data.identifier ?? '',
       metering_presence: data.metering_presence ?? '',
       disconnected: data.disconnected ?? '',
+      disconnected_date: data.disconnected_date ?? '',
     })
   }, [data])
 
@@ -159,12 +163,14 @@ export default function ContactsDetail() {
       identifier: data.identifier ?? '',
       metering_presence: data.metering_presence ?? '',
       disconnected: data.disconnected ?? '',
+      disconnected_date: data.disconnected_date ?? '',
     })
   }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    updateMutation.mutate(form)
+    if (!data) return
+    updateMutation.mutate(contactUpdatePayloadForCategory(data.category, form))
   }
 
   return (
@@ -279,9 +285,11 @@ export default function ContactsDetail() {
           <button type="button" onClick={() => setIsEditing((v) => !v)} className="rounded border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
             {isEditing ? 'Закрыть редактирование' : 'Редактировать'}
           </button>
-          <button type="button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
-            {deleteMutation.isPending ? 'Удаляю...' : 'Удалить'}
-          </button>
+          {canDelete && (
+            <button type="button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
+              {deleteMutation.isPending ? 'Удаляю...' : 'Удалить'}
+            </button>
+          )}
         </div>
 
         {data.category === 'gspo' && (

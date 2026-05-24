@@ -194,10 +194,7 @@ module ContactsService
       raise ArgumentError, 'contact not found' unless existing
 
       if existing['category'].to_s == 'gspo'
-        forbidden = %w[name address identifier].select { |key| attrs.key?(key) || attrs.key?(key.to_sym) }
-        unless forbidden.empty?
-          raise ArgumentError, 'Для ГСПО поля name/address/identifier редактируются только через карточку объекта (registry_object).'
-        end
+        attrs = attrs.reject { |key, _| %w[name address identifier].include?(key.to_s) }
       end
 
       with_registry_object(ContactsDB.update_by_id(db, id, attrs), db: db)

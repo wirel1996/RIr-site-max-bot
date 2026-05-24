@@ -74,10 +74,16 @@ export const adminApi = {
       db_backup_daily_time: string
       db_backup_notify_user_id: string
       metering_act_counter: { category: string; year: number; next_number: number }
+      object_switch_act_counter: { next_number: number }
     }>('/admin/max-users'),
   updateMeteringActCounter: (payload: { category?: string; year: number; next_number: number }) =>
     api.patch<{ metering_act_counter: { category: string; year: number; next_number: number } }>(
       '/admin/settings/metering-act-counter',
+      payload,
+    ),
+  updateObjectSwitchActCounter: (payload: { next_number: number }) =>
+    api.patch<{ object_switch_act_counter: { next_number: number } }>(
+      '/admin/settings/object-switch-act-counter',
       payload,
     ),
   updateWaterPaymentNotifyUsers: (userIds: string[]) =>

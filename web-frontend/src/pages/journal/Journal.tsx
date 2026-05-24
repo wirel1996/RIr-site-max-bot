@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { journalApi, type JournalWeek, type JournalWeekData } from '../../api/journal'
 import { journalRu as t } from '../../locales/ru/journal'
+import { useAuth } from '../../contexts/AuthContext'
 
 type CellPos = { date: string; time: string; person: string }
 
@@ -180,6 +181,7 @@ function JournalCell({
 }
 
 export default function Journal() {
+  const { canDelete } = useAuth()
   const queryClient = useQueryClient()
   const tabsRef = useRef<HTMLDivElement>(null)
 
@@ -726,12 +728,14 @@ export default function Journal() {
                 if (!name || !name.trim()) return
                 addColumn.mutate({ start: activeWeek, name: name.trim() })
               }}>Добавить столбик</button>
+              {canDelete && (
               <button className="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-100" onClick={() => {
                 if (!activeWeek) return
                 const name = window.prompt(`Удалить столбик (точное наименование):\n${people.join('\n')}`)
                 if (!name || !name.trim()) return
                 deleteColumn.mutate({ start: activeWeek, name: name.trim() })
               }}>Удалить столбик</button>
+              )}
             </div>
             <div className="border rounded p-3">
               <div className="text-xs font-semibold mb-2">Изменить названия столбцов</div>

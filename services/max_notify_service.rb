@@ -13,6 +13,7 @@ module MaxNotifyService
   MAX_API_URL = 'https://platform-api.max.ru/messages'
 
   def enabled?
+    return false if ENV['CONTACTS_WEB_ENV'].to_s.strip == 'test'
     (ENV['MAX_ENABLED'] || '1').to_s.strip == '1' && !token.empty?
   end
 

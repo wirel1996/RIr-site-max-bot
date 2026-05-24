@@ -9,7 +9,7 @@ const navItems = [
 const objectItems = [
   { to: '/objects', label: 'Объекты' },
   { to: '/contacts', label: 'Контакты' },
-  { to: '/metering/gspo', label: 'Приборы учета' },
+  { to: '/metering', label: 'Приборы учета' },
   { to: '/summer-water', label: 'Вода на лето ГСПО', waterAllowed: true },
 ]
 

@@ -85,6 +85,7 @@ module ContactsDB
         object_id        INTEGER,
         metering_presence TEXT,
         disconnected     TEXT,
+        disconnected_date TEXT,
         sync_status      TEXT,
         sync_note        TEXT,
         source_row       INTEGER,
@@ -107,6 +108,20 @@ module ContactsDB
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS object_switch_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        act_number TEXT,
+        event_date TEXT,
+        place TEXT,
+        seal_numbers TEXT,
+        actor_name TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_object_switch_events_object_id ON object_switch_events(object_id);
     SQL
 
     columns = db.execute('PRAGMA table_info(contacts)').map { |row| row['name'] }
@@ -116,6 +131,10 @@ module ContactsDB
     db.execute('ALTER TABLE contacts ADD COLUMN object_id INTEGER') unless columns.include?('object_id')
     db.execute('ALTER TABLE contacts ADD COLUMN metering_presence TEXT') unless columns.include?('metering_presence')
     db.execute('ALTER TABLE contacts ADD COLUMN disconnected TEXT') unless columns.include?('disconnected')
+    db.execute('ALTER TABLE contacts ADD COLUMN disconnected_date TEXT') unless columns.include?('disconnected_date')
+
+    switch_columns = db.execute('PRAGMA table_info(object_switch_events)').map { |row| row['name'] }
+    db.execute('ALTER TABLE object_switch_events ADD COLUMN seal_numbers TEXT') unless switch_columns.include?('seal_numbers')
     db.execute('ALTER TABLE contacts ADD COLUMN sync_status TEXT') unless columns.include?('sync_status')
     db.execute('ALTER TABLE contacts ADD COLUMN sync_note TEXT') unless columns.include?('sync_note')
     db.execute('CREATE INDEX IF NOT EXISTS idx_contacts_identifier ON contacts(identifier)')
@@ -426,7 +445,7 @@ module ContactsDB
   end
 
   def update_by_id(db, id, attrs)
-    allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected]
+    allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected disconnected_date]
     values = attrs.each_with_object({}) do |(key, value), memo|
       k = key.to_s
       next unless allowed.include?(k)
@@ -451,7 +470,7 @@ module ContactsDB
   end
 
   def create(db, category, attrs)
-    allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected]
+    allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected disconnected_date]
     values = allowed.each_with_object({}) do |key, memo|
       v = clean_contact_value(key, attrs[key])
       memo[key] = v.empty? ? nil : v
@@ -460,8 +479,8 @@ module ContactsDB
 
     db.execute(
       'INSERT INTO contacts ' \
-      '(category, name, connection_point, consumer, manager, address, phone, phone_alt, email, postal_address, notes, identifier, metering_presence, disconnected, source_row, updated_at) ' \
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)',
+      '(category, name, connection_point, consumer, manager, address, phone, phone_alt, email, postal_address, notes, identifier, metering_presence, disconnected, disconnected_date, source_row, updated_at) ' \
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)',
       [
         category,
         values['name'],
@@ -477,6 +496,7 @@ module ContactsDB
         values['identifier'],
         values['metering_presence'],
         values['disconnected'],
+        values['disconnected_date'],
         now
       ]
     )
@@ -511,6 +531,68 @@ module ContactsDB
       [metering_presence.to_s.strip.empty? ? nil : metering_presence.to_s.strip, Time.now.to_i, id.to_i]
     )
     find_by_id(db, id)
+  end
+
+  def contacts_for_object(db, object_id)
+    db.execute(
+      'SELECT * FROM contacts WHERE object_id = ? ORDER BY category, COALESCE(NULLIF(TRIM(address), \'\'), name, \'\'), id',
+      [object_id.to_i]
+    )
+  end
+
+  def switch_events_for_object(db, object_id)
+    db.execute(
+      'SELECT * FROM object_switch_events WHERE object_id = ? ORDER BY COALESCE(NULLIF(event_date, \'\'), created_at) DESC, id DESC',
+      [object_id.to_i]
+    )
+  end
+
+  def latest_switch_event(db, object_id, kind:)
+    db.get_first_row(
+      'SELECT * FROM object_switch_events WHERE object_id = ? AND kind = ? ' \
+      'ORDER BY COALESCE(NULLIF(event_date, \'\'), created_at) DESC, id DESC LIMIT 1',
+      [object_id.to_i, kind.to_s]
+    )
+  end
+
+  def create_switch_event(db, object_id:, kind:, act_number:, event_date:, place:, seal_numbers:, actor_name:)
+    now = Time.now.to_i
+    db.execute(
+      'INSERT INTO object_switch_events(object_id, kind, act_number, event_date, place, seal_numbers, actor_name, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        object_id.to_i,
+        kind.to_s,
+        act_number.to_s.strip,
+        event_date.to_s.strip,
+        place.to_s.strip,
+        seal_numbers.to_s.strip,
+        actor_name.to_s.strip,
+        now,
+        now
+      ]
+    )
+    db.get_first_row('SELECT * FROM object_switch_events WHERE id = ?', [db.last_insert_row_id])
+  end
+
+  def normalize_yes_no(value)
+    text = value.to_s.strip
+    return nil if text.empty?
+
+    key = text.downcase
+    return 'да' if %w[да да. yes y 1 true +].include?(key)
+    return 'нет' if %w[нет нет. no n 0 false -].include?(key)
+
+    text
+  end
+
+  def set_object_contacts_disconnected(db, object_id:, disconnected:, disconnected_date:)
+    now = Time.now.to_i
+    normalized = normalize_yes_no(disconnected)
+    db.execute(
+      'UPDATE contacts SET disconnected = ?, disconnected_date = ?, updated_at = ? WHERE object_id = ?',
+      [normalized, disconnected_date.to_s.strip, now, object_id.to_i]
+    )
+    db.changes
   end
 
   def search(db, query, limit:)
@@ -552,6 +634,7 @@ module ContactsDB
 
   def clean_contact_value(key, value)
     return clean_phone_text(value) if %w[phone phone_alt].include?(key.to_s)
+    return normalize_yes_no(value) if key.to_s == 'disconnected'
 
     value.to_s.strip
   end

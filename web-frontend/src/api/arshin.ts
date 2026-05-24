@@ -33,6 +33,7 @@ export type ArshinSearchResponse = {
 
 export type ArshinMeterSearchRequest = {
   serial: string
+  serial_candidates?: string[]
   result_docnum?: string
   valid_until?: string
   year?: string

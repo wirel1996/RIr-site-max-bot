@@ -435,7 +435,7 @@ module JournalService
     # Синк только по рабочему окну: несколько последних недель + ближайшая вперед.
     # Глубокий архив не перечитываем — он практически не меняется.
     past_weeks = (ENV['JOURNAL_SYNC_PAST_WEEKS'] || '1').to_i
-    future_weeks = (ENV['JOURNAL_SYNC_FUTURE_WEEKS'] || '4').to_i
+    future_weeks = (ENV['JOURNAL_SYNC_FUTURE_WEEKS'] || '8').to_i
     past_weeks = 4 if past_weeks <= 0
     future_weeks = 1 if future_weeks.negative?
     this_monday = Date.today - ((Date.today.wday - 1) % 7)
@@ -1310,6 +1310,8 @@ module JournalService
     end
 
     index_all(force: true)
+    # Persist the just-created week immediately so /api/journal/weeks sees it right away.
+    sync_week_to_db!(next_monday.iso8601)
     invalidate_week_cache(next_monday.iso8601)
     [true, { start: next_monday.iso8601, sheet: new_name, template: template_name }]
   end

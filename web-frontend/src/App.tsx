@@ -24,7 +24,7 @@ import BillingObject from './pages/billing/BillingObject'
 import VolumeCalc from './pages/calc/VolumeCalc'
 import AdminUsers from './pages/admin/AdminUsers'
 import MeteringHome from './pages/metering/MeteringHome'
-import MeteringGspo from './pages/metering/MeteringGspo'
+import MeteringList from './pages/metering/MeteringList'
 import MeteringDetail from './pages/metering/MeteringDetail'
 import WaterRegistry from './pages/metering/WaterRegistry'
 import WaterRegistryDetail from './pages/metering/WaterRegistryDetail'
@@ -133,12 +133,12 @@ export default function App() {
         <Route path="arshin" element={<RequireNotWaterPaymentOnly><ArshinHome /></RequireNotWaterPaymentOnly>} />
 
         <Route path="metering" element={<RequireNotWaterPaymentOnly><MeteringHome /></RequireNotWaterPaymentOnly>} />
-        <Route path="metering/gspo" element={<RequireNotWaterPaymentOnly><MeteringGspo /></RequireNotWaterPaymentOnly>} />
-        <Route path="metering/gspo/:id" element={<RequireNotWaterPaymentOnly><MeteringDetail /></RequireNotWaterPaymentOnly>} />
-        <Route path="summer-water" element={<WaterRegistry />} />
-        <Route path="summer-water/:id" element={<RequireNotWaterPaymentOnly><WaterRegistryDetail /></RequireNotWaterPaymentOnly>} />
         <Route path="metering/water" element={<Navigate to="/summer-water" replace />} />
         <Route path="metering/water/:id" element={<LegacyWaterDetailRedirect />} />
+        <Route path="metering/:category" element={<RequireNotWaterPaymentOnly><MeteringList /></RequireNotWaterPaymentOnly>} />
+        <Route path="metering/:category/:id" element={<RequireNotWaterPaymentOnly><MeteringDetail /></RequireNotWaterPaymentOnly>} />
+        <Route path="summer-water" element={<WaterRegistry />} />
+        <Route path="summer-water/:id" element={<RequireNotWaterPaymentOnly><WaterRegistryDetail /></RequireNotWaterPaymentOnly>} />
 
         <Route
           path="billing"

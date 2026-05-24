@@ -6,7 +6,7 @@ import { objectsApi, type ObjectRecord } from '../../api/objects'
 import { useAuth } from '../../contexts/AuthContext'
 import { meteringFieldLabel } from './meteringFieldLabels'
 
-const CATEGORY_LABELS: Record<string, string> = {
+const FALLBACK_CATEGORY_LABELS: Record<string, string> = {
   gspo: 'ГСПО',
   phys: 'Прочие ФЛ',
   legal: 'Прочие ЮЛ',
@@ -41,7 +41,14 @@ export default function MeteringList() {
   const { user } = useAuth()
 
   const cat = category ?? 'gspo'
-  const label = CATEGORY_LABELS[cat] || cat
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ['metering', 'categories'],
+    queryFn: () => meteringApi.categories(),
+  })
+  const categoryLabel = categoriesData?.categories.find((row) => row.key === cat)?.label
+    || FALLBACK_CATEGORY_LABELS[cat]
+    || cat
 
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ['metering', cat, page, query.trim()],
@@ -89,14 +96,20 @@ export default function MeteringList() {
     setSearchParams(params)
   }
 
-  const exportUrl = `/api/metering/${cat}/export`
+  const exportUrl = meteringApi.exportUrl(cat)
 
   return (
     <div className="space-y-4">
-      <nav className="text-sm"><Link to="/metering" className="text-blue-600 hover:underline">← Приборы учета</Link></nav>
+      <nav className="text-sm text-gray-600">
+        <Link to="/objects" className="text-blue-600 hover:underline">Объекты</Link>
+        <span className="mx-1">→</span>
+        <Link to="/metering" className="text-blue-600 hover:underline">Приборы учета</Link>
+        <span className="mx-1">→</span>
+        <span className="text-gray-900">{categoryLabel}</span>
+      </nav>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{label}</h1>
+          <h1 className="text-2xl font-bold">{categoryLabel}</h1>
           <p className="text-sm text-gray-600">{data ? `Всего объектов: ${data.total}` : 'Объекты УУТЭ'}{isFetching ? ' · обновляю...' : ''}</p>
           {data?.last_import && <p className="text-xs text-gray-500">Последний импорт: {new Date(data.last_import.imported_at * 1000).toLocaleString('ru-RU')}</p>}
         </div>
@@ -226,6 +239,7 @@ export default function MeteringList() {
       {showCreate && (
         <CreateMeteringModal
           category={cat}
+          categories={categoriesData?.categories ?? []}
           onClose={() => setShowCreate(false)}
           onCreated={(id) => navigate(`/metering/${cat}/${id}`)}
         />
@@ -234,7 +248,12 @@ export default function MeteringList() {
   )
 }
 
-function CreateMeteringModal({ category: initialCat, onClose, onCreated }: { category: string; onClose: () => void; onCreated: (id: number) => void }) {
+function CreateMeteringModal({ category: initialCat, categories, onClose, onCreated }: {
+  category: string
+  categories: Array<{ key: string; label: string }>
+  onClose: () => void
+  onCreated: (id: number) => void
+}) {
   const [cat, setCat] = useState(initialCat)
   const [objectSearch, setObjectSearch] = useState('')
   const [selectedObject, setSelectedObject] = useState<ObjectRecord | null>(null)
@@ -293,8 +312,8 @@ function CreateMeteringModal({ category: initialCat, onClose, onCreated }: { cat
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
             <select value={cat} onChange={(e) => setCat(e.target.value)} className="w-full rounded border px-3 py-2 text-sm">
-              {Object.entries(CATEGORY_LABELS).map(([key, lbl]) => (
-                <option key={key} value={key}>{lbl}</option>
+              {(categories.length > 0 ? categories : [{ key: initialCat, label: FALLBACK_CATEGORY_LABELS[initialCat] || initialCat }]).map((row) => (
+                <option key={row.key} value={row.key}>{row.label}</option>
               ))}
             </select>
           </div>

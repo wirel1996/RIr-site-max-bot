@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, type FormEvent } from 'react'
 import { contactsApi, type CategoryInfo } from '../../api/contacts'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function ContactsHome() {
+  const { canDelete } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
@@ -173,7 +175,7 @@ export default function ContactsHome() {
                 >
                   Редактировать
                 </button>
-                {!cat.system && cat.count === 0 && (
+                {!cat.system && cat.count === 0 && canDelete && (
                   <button
                     type="button"
                     disabled={deleteCategory.isPending}

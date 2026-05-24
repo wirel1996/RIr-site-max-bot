@@ -6,6 +6,19 @@ require 'fileutils'
 module UuteDB
   module_function
 
+  CATEGORIES = %w[uk_tsj gspo phys legal budget iglakovo embedded bu2].freeze
+
+  CATEGORY_LABELS = {
+    'uk_tsj'   => 'УК и ТСЖ',
+    'gspo'     => 'ГСПО',
+    'phys'     => 'Прочие ФЛ',
+    'legal'    => 'Прочие ЮЛ',
+    'budget'   => 'Бюджет',
+    'iglakovo' => 'Иглаково (коттеджи)',
+    'embedded' => 'Встроенные помещения',
+    'bu2'      => 'БУ-2'
+  }.freeze
+
   @db_mutex = Mutex.new
 
   def db_path
@@ -37,6 +50,11 @@ module UuteDB
       s = value.to_s
       s = s.dup.force_encoding('UTF-8') unless s.encoding == Encoding::UTF_8
       func.result = s.downcase
+    end
+    db.create_function('search_norm', 1) do |func, value|
+      s = value.to_s
+      s = s.dup.force_encoding('UTF-8') unless s.encoding == Encoding::UTF_8
+      func.result = s.downcase.gsub(/[^\p{L}\p{N}]+/u, '')
     end
   end
 
@@ -180,7 +198,18 @@ module UuteDB
         next_number INTEGER NOT NULL DEFAULT 1,
         PRIMARY KEY (category, kind, year)
       );
+
+      CREATE TABLE IF NOT EXISTS uute_categories (
+        key        TEXT PRIMARY KEY,
+        label      TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        system     INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     SQL
+
+    seed_uute_categories(db)
 
     columns = db.execute('PRAGMA table_info(uute_objects)').map { |row| row['name'] }
     db.execute('ALTER TABLE uute_objects ADD COLUMN object_id INTEGER') unless columns.include?('object_id')
@@ -329,30 +358,17 @@ module UuteDB
     db.get_first_row('SELECT * FROM uute_imports ORDER BY imported_at DESC LIMIT 1')
   end
 
-  def count(db, category: nil, query: nil)
-    cat_where = category.to_s.empty? ? '' : "category = '#{category}' AND "
-    if query.to_s.strip.empty?
-      db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE #{cat_where}1=1").to_i
-    else
-      q = "%#{query.to_s.downcase}%"
-      db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE #{cat_where}#{search_where}", [q, q, q, q, q, q, q]).to_i
-    end
+  def count(db, category: nil, query: nil, object_ids: nil)
+    where, params = filter_where(category: category, query: query, object_ids: object_ids)
+    db.get_first_value("SELECT COUNT(*) FROM uute_objects WHERE #{where}", params).to_i
   end
 
-  def list(db, category: nil, limit:, offset:, query: nil)
-    cat_where = category.to_s.empty? ? '' : "category = '#{category}' AND "
-    if query.to_s.strip.empty?
-      db.execute(
-        "SELECT * FROM uute_objects WHERE #{cat_where}1=1 ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
-        [limit, offset]
-      )
-    else
-      q = "%#{query.to_s.downcase}%"
-      db.execute(
-        "SELECT * FROM uute_objects WHERE #{cat_where}#{search_where} ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
-        [q, q, q, q, q, q, q, limit, offset]
-      )
-    end
+  def list(db, category: nil, limit:, offset:, query: nil, object_ids: nil)
+    where, params = filter_where(category: category, query: query, object_ids: object_ids)
+    db.execute(
+      "SELECT * FROM uute_objects WHERE #{where} ORDER BY COALESCE(NULLIF(TRIM(address), ''), name, '') LIMIT ? OFFSET ?",
+      params + [limit, offset]
+    )
   end
 
   def all_for_category(db, category)
@@ -361,6 +377,118 @@ module UuteDB
 
   def find(db, id)
     db.get_first_row('SELECT * FROM uute_objects WHERE id = ?', [id.to_i])
+  end
+
+  def seed_uute_categories(db)
+    now = Time.now.to_i
+    CATEGORIES.each_with_index do |key, index|
+      label = CATEGORY_LABELS[key] || key
+      row = db.get_first_row('SELECT key FROM uute_categories WHERE key = ?', [key])
+      system = key == 'gspo' ? 1 : 0
+      if row
+        db.execute(
+          'UPDATE uute_categories SET label = ?, sort_order = ?, updated_at = ? WHERE key = ?',
+          [label, index, now, key]
+        )
+      else
+        db.execute(
+          'INSERT INTO uute_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)',
+          [key, label, index, system, now, now]
+        )
+      end
+    end
+
+    db.execute('SELECT DISTINCT category FROM uute_objects WHERE COALESCE(TRIM(category), \'\') <> \'\'').each do |row|
+      key = row['category'].to_s.strip
+      next if key.empty? || category_exists?(db, key)
+
+      db.execute(
+        'INSERT INTO uute_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, 0, ?, ?)',
+        [key, CATEGORY_LABELS[key] || key, next_category_order(db), now, now]
+      )
+    end
+  end
+  private_class_method :seed_uute_categories
+
+  def categories(db)
+    db.execute('SELECT key, label, sort_order, system, created_at, updated_at FROM uute_categories ORDER BY sort_order, label, key')
+  end
+
+  def category_keys(db)
+    categories(db).map { |row| row['key'].to_s }
+  end
+
+  def category_exists?(db, key)
+    !!db.get_first_row('SELECT 1 FROM uute_categories WHERE key = ?', [key.to_s])
+  end
+
+  def category_by_key(db, key)
+    db.get_first_row('SELECT key, label, sort_order, system, created_at, updated_at FROM uute_categories WHERE key = ?', [key.to_s])
+  end
+
+  def count_in_category(db, category)
+    db.get_first_value('SELECT COUNT(*) FROM uute_objects WHERE category = ?', [category.to_s]).to_i
+  end
+
+  def category_counts(db)
+    rows = db.execute('SELECT category, COUNT(*) AS cnt FROM uute_objects GROUP BY category')
+    rows.each_with_object({}) { |row, acc| acc[row['category'].to_s] = row['cnt'].to_i }
+  end
+
+  def create_category(db, key:, label:, sort_order: nil)
+    k = key.to_s.strip
+    l = label.to_s.strip
+    raise ArgumentError, 'Ключ категории обязателен' if k.empty?
+    raise ArgumentError, 'Название категории обязательно' if l.empty?
+    raise ArgumentError, 'Категория с таким ключом уже есть' if category_exists?(db, k)
+
+    order = sort_order.nil? ? next_category_order(db) : sort_order.to_i
+    now = Time.now.to_i
+    db.execute(
+      'INSERT INTO uute_categories(key, label, sort_order, system, created_at, updated_at) VALUES(?, ?, ?, 0, ?, ?)',
+      [k, l, order, now, now]
+    )
+    category_by_key(db, k)
+  end
+
+  def update_category(db, key, attrs)
+    row = category_by_key(db, key)
+    return nil unless row
+
+    label = attrs.key?('label') ? attrs['label'].to_s.strip : row['label'].to_s
+    raise ArgumentError, 'Название категории обязательно' if label.empty?
+
+    sort_order = attrs.key?('sort_order') ? attrs['sort_order'].to_i : row['sort_order'].to_i
+    db.execute(
+      'UPDATE uute_categories SET label = ?, sort_order = ?, updated_at = ? WHERE key = ?',
+      [label, sort_order, Time.now.to_i, key.to_s]
+    )
+    category_by_key(db, key)
+  end
+
+  def delete_category(db, key)
+    row = category_by_key(db, key)
+    return nil unless row
+    raise ArgumentError, 'Системную категорию удалить нельзя' if row['system'].to_i == 1
+    raise ArgumentError, 'В категории есть приборы учета' if count_in_category(db, key).positive?
+
+    db.execute('DELETE FROM uute_categories WHERE key = ?', [key.to_s])
+    row
+  end
+
+  def next_category_order(db)
+    max = db.get_first_value('SELECT MAX(sort_order) FROM uute_categories').to_i
+    max + 10
+  end
+  private_class_method :next_category_order
+
+  def delete_record(db, id)
+    row = find(db, id)
+    return nil unless row
+
+    db.execute('DELETE FROM uute_contact_links WHERE uute_id = ?', [id.to_i])
+    db.execute('DELETE FROM uute_objects WHERE id = ?', [id.to_i])
+    row
   end
 
   def create(db, attrs)
@@ -454,16 +582,59 @@ module UuteDB
     max_num
   end
 
-  def search_where
-    '(' \
-      "lower_ru(COALESCE(name, '')) LIKE ? OR " \
-      "lower_ru(COALESCE(address, '')) LIKE ? OR " \
-      "lower_ru(COALESCE(contract_number, '')) LIKE ? OR " \
-      "lower_ru(COALESCE(identifier, '')) LIKE ? OR " \
-      "lower_ru(COALESCE(calculator_type, '')) LIKE ? OR " \
-      "lower_ru(COALESCE(calculator_serial, '')) LIKE ? OR " \
-      "lower_ru(COALESCE(service_org, '')) LIKE ?" \
-    ')'
+  def filter_where(category:, query:, object_ids:)
+    clauses = []
+    params = []
+    cat = category.to_s.strip
+    unless cat.empty?
+      clauses << 'category = ?'
+      params << cat
+    end
+
+    search_clauses = []
+    search_params = []
+    tokens = search_tokens(query)
+    unless tokens.empty?
+      blob = search_blob
+      search_clauses << tokens.map { "search_norm(#{blob}) LIKE ?" }.join(' AND ')
+      search_params.concat(tokens.map { |token| "%#{search_compact(token)}%" })
+    end
+
+    ids = Array(object_ids).map(&:to_i).select(&:positive?).uniq
+    unless ids.empty?
+      search_clauses << "object_id IN (#{(['?'] * ids.size).join(',')})"
+      search_params.concat(ids)
+    end
+
+    unless search_clauses.empty?
+      clauses << "(#{search_clauses.join(' OR ')})"
+      params.concat(search_params)
+    end
+
+    [clauses.empty? ? '1=1' : clauses.join(' AND '), params]
   end
-  private_class_method :search_where
+  private_class_method :filter_where
+
+  def search_blob
+    [
+      "COALESCE(name, '')",
+      "COALESCE(address, '')",
+      "COALESCE(contract_number, '')",
+      "COALESCE(identifier, '')",
+      "COALESCE(calculator_type, '')",
+      "COALESCE(calculator_serial, '')",
+      "COALESCE(service_org, '')"
+    ].join(" || ' ' || ")
+  end
+  private_class_method :search_blob
+
+  def search_tokens(value)
+    value.to_s.downcase.scan(/[\p{L}\p{N}]+/u).map { |token| search_compact(token) }.reject(&:empty?).uniq.first(12)
+  end
+  private_class_method :search_tokens
+
+  def search_compact(value)
+    value.to_s.downcase.gsub(/[^\p{L}\p{N}]+/u, '')
+  end
+  private_class_method :search_compact
 end

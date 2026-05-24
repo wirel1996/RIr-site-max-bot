@@ -32,6 +32,16 @@ export function contactPhone(record: Contact): string {
   return clean(record.phone)
 }
 
+export function contactUpdatePayloadForCategory(
+  category: ContactCategory,
+  form: ContactUpdatePayload,
+): ContactUpdatePayload {
+  const allowed = new Set(editableFieldsForCategory(category).map(([key]) => key))
+  return Object.fromEntries(
+    Object.entries(form).filter(([key]) => allowed.has(key as keyof ContactUpdatePayload)),
+  ) as ContactUpdatePayload
+}
+
 export function editableFieldsForCategory(category: ContactCategory): EditableContactField[] {
   switch (category) {
     case 'uk_tsj':
@@ -53,6 +63,7 @@ export function editableFieldsForCategory(category: ContactCategory): EditableCo
         ['postal_address', 'Почтовый адрес', 'input'],
         ['metering_presence', 'Наличие приборов учёта', 'yes_no'],
         ['disconnected', 'Отключено', 'yes_no'],
+        ['disconnected_date', 'Дата отключения/включения', 'input'],
       ]
     case 'phys':
       return [

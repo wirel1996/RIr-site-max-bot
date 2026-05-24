@@ -18,6 +18,7 @@ type AuthState =
 type AuthContextValue = {
   state: AuthState
   user: AuthUser | null
+  canDelete: boolean
   login: (login: string, password: string) => Promise<AuthUser>
   logout: () => Promise<void>
 }
@@ -89,7 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state.status, location.pathname, location.search, location.hash])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ state, user: state.user, login, logout }),
+    () => ({
+      state,
+      user: state.user,
+      canDelete: state.user?.role === 'admin',
+      login,
+      logout,
+    }),
     [state, login, logout],
   )
 

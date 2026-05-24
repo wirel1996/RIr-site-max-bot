@@ -378,7 +378,8 @@ class ContactsWeb < Sinatra::Base
       db_backup_email: DbBackupService.email_to,
       db_backup_daily_time: DbBackupService.daily_time,
       db_backup_notify_user_id: MaxNotifyService.db_backup_notify_user_id,
-      metering_act_counter: UuteService.metering_act_counter_info('gspo')
+      metering_act_counter: UuteService.metering_act_counter_info('gspo'),
+      object_switch_act_counter: ObjectsService.switch_act_counter_info
     )
   end
 
@@ -802,6 +803,7 @@ class ContactsWeb < Sinatra::Base
   end
 
   delete '/api/contacts/categories/:key' do |key|
+    require_admin!
     category = ContactsService.delete_category(key)
     halt 404, json_error('not found', 404) unless category
     audit!(
@@ -853,7 +855,7 @@ class ContactsWeb < Sinatra::Base
     halt 404, json_error('unknown category', 404) unless ContactsService.category_exists?(cat)
 
     body = parse_json_body
-    allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected]
+    allowed = %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected disconnected_date]
     halt 400, json_error('Заполните хотя бы одно поле', 400) if allowed.none? { |key| !body[key].to_s.strip.empty? }
 
     record = ContactsService.create(cat, body)
@@ -885,9 +887,29 @@ class ContactsWeb < Sinatra::Base
     json_response(categories: ObjectsService.categories)
   end
 
+  get '/api/objects/switch-act-authors' do
+    json_response(authors: UsersService.switch_act_authors)
+  end
+
   get '/api/objects/:category' do |cat|
     query = params[:q].to_s
     json_response(category: cat, records: ObjectsService.list(cat, query: query))
+  end
+
+  get '/api/objects/:category/export-switch-events' do |cat|
+    require 'date'
+    mode = params[:mode].to_s.strip
+    mode = 'full' if mode.empty?
+    halt 400, json_error('mode must be full, disconnect or connect', 400) unless %w[full disconnect connect].include?(mode)
+
+    path, filename, count = ObjectsService.write_switch_events_export_xls(cat, mode: mode)
+    audit!(
+      action: 'objects_switch_export',
+      entity_type: 'registry_object',
+      entity_label: "#{cat}/#{mode}",
+      details: { category: cat, mode: mode, rows: count }
+    )
+    send_file path, filename: filename, type: 'application/vnd.ms-excel', disposition: 'attachment'
   end
 
   get '/api/objects/:category/:id' do |cat, id|
@@ -895,6 +917,29 @@ class ContactsWeb < Sinatra::Base
     halt 404, json_error('not found', 404) unless payload
 
     json_response(payload)
+  end
+
+  patch '/api/admin/settings/object-switch-act-counter' do
+    require_admin!
+    body = parse_json_body
+    info = ObjectsService.set_switch_act_counter(body['next_number'])
+    json_response(object_switch_act_counter: info)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  post '/api/objects/:category/:id/switch-events' do |_cat, id|
+    event = ObjectsService.create_switch_event(id, parse_json_body)
+    audit!(
+      action: 'object_switch_event_create',
+      entity_type: 'registry_object',
+      entity_id: id.to_s,
+      entity_label: event[:kind].to_s,
+      details: event
+    )
+    json_response(event)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
   end
 
   patch '/api/registry-objects/:id' do |id|
@@ -929,14 +974,17 @@ class ContactsWeb < Sinatra::Base
       entity_label: contact_label(record),
       before: before_record,
       after: record,
-      fields: %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected],
+      fields: %w[name connection_point consumer manager address phone phone_alt email postal_address notes identifier metering_presence disconnected disconnected_date],
       ip: request_ip,
       user_agent: request.user_agent
     )
     json_response(record)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
   end
 
   delete '/api/contacts/:id' do |id|
+    require_admin!
     record = ContactsService.delete(id)
     halt 404, json_error('not found', 404) unless record
 
@@ -1100,6 +1148,7 @@ class ContactsWeb < Sinatra::Base
   end
 
   delete '/api/journal/column' do
+    require_admin!
     halt 503, json_error('journal not configured', 503) unless JournalService.enabled?
 
     body = parse_json_body
@@ -1229,6 +1278,7 @@ class ContactsWeb < Sinatra::Base
   end
 
   delete '/api/metering/links' do
+    require_admin!
     body = parse_json_body
     UuteService.delete_link(contact_id: body['contact_id'], uute_id: body['uute_id'])
     audit!(
@@ -1388,12 +1438,30 @@ class ContactsWeb < Sinatra::Base
     )
   end
 
+  get '/api/metering/water/phoneogram/history' do
+    require_not_water_payment_only!
+    json_response(last_export: WaterPhoneogramService.last_export)
+  end
+
   get '/api/metering/water/phoneogram' do
     require_not_water_payment_only!
     path, filename = WaterPhoneogramService.build(
       payment_from: params[:payment_from],
       payment_to: params[:payment_to],
-      signer: params[:signer]
+      signer: params[:signer],
+      phoneogram_number: params[:phoneogram_number],
+      document_date: params[:document_date]
+    )
+    audit!(
+      action: 'water_phoneogram_export',
+      entity_type: 'summer_water',
+      entity_label: "Телефонограмма № #{params[:phoneogram_number]}",
+      details: {
+        payment_from: params[:payment_from],
+        payment_to: params[:payment_to],
+        phoneogram_number: params[:phoneogram_number],
+        document_date: params[:document_date]
+      }
     )
     send_file path, filename: filename, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', disposition: 'attachment'
   rescue ArgumentError => e
@@ -1563,6 +1631,81 @@ class ContactsWeb < Sinatra::Base
     json_response(people: UuteService.people_list)
   end
 
+  get '/api/metering/overview' do
+    counts = UuteService.counts
+    categories = UuteService.category_records.map do |row|
+      key = row['key'].to_s
+      {
+        key: key,
+        label: row['label'].to_s,
+        sort_order: row['sort_order'].to_i,
+        system: row['system'].to_i == 1,
+        count: counts[key].to_i
+      }
+    end
+    json_response(categories: categories)
+  end
+
+  get '/api/metering/categories' do
+    counts = UuteService.counts
+    categories = UuteService.category_records.map do |row|
+      key = row['key'].to_s
+      row.merge(
+        'sort_order' => row['sort_order'].to_i,
+        'system' => row['system'].to_i == 1,
+        'count' => counts[key].to_i
+      )
+    end
+    json_response(categories: categories)
+  end
+
+  post '/api/metering/categories' do
+    require_not_water_payment_only!
+    body = parse_json_body
+    category = UuteService.create_category(body)
+    audit!(
+      action: 'metering_category_create',
+      entity_type: 'metering_category',
+      entity_id: category['key'],
+      entity_label: category['label']
+    )
+    json_response(category, 201)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  patch '/api/metering/categories/:key' do |key|
+    require_not_water_payment_only!
+    before = UuteService.category_records.find { |row| row['key'].to_s == key.to_s }
+    category = UuteService.update_category(key, parse_json_body)
+    halt 404, json_error('not found', 404) unless category
+    audit!(
+      action: 'metering_category_update',
+      entity_type: 'metering_category',
+      entity_id: category['key'],
+      entity_label: category['label'],
+      details: { before: before }
+    )
+    json_response(category)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
+  delete '/api/metering/categories/:key' do |key|
+    require_admin!
+    category = UuteService.delete_category(key)
+    halt 404, json_error('not found', 404) unless category
+    audit!(
+      action: 'metering_category_delete',
+      entity_type: 'metering_category',
+      entity_id: category['key'],
+      entity_label: category['label']
+    )
+    json_response(ok: true, category: category)
+  rescue ArgumentError => e
+    halt 400, json_error(e.message, 400)
+  end
+
   # List and create for category
   get '/api/metering/:category' do |cat|
     page = [params[:page].to_i, 0].max
@@ -1592,6 +1735,25 @@ class ContactsWeb < Sinatra::Base
     halt 404, json_error('not found', 404) unless record
 
     json_response(record)
+  end
+
+  delete '/api/metering/:category/:id' do |cat, id|
+    require_admin!
+    before = UuteService.find(id)
+    halt 404, json_error('not found', 404) unless before
+    halt 400, json_error('Категория не совпадает', 400) if before[:category].to_s != cat.to_s
+
+    UuteService.delete_record(id)
+    audit!(
+      action: 'metering_delete',
+      entity_type: 'metering',
+      entity_id: id.to_s,
+      entity_label: billing_label(before),
+      details: { category: cat, before: before }
+    )
+    json_response(ok: true)
+  rescue ArgumentError => e
+    halt 404, json_error(e.message, 404)
   end
 
   patch '/api/metering/:category/:id' do |_cat, id|
@@ -1654,6 +1816,7 @@ class ContactsWeb < Sinatra::Base
   end
 
   post '/api/metering/:category/:id/delete-act' do |_cat, id|
+    require_admin!
       body = parse_json_body
   before = UuteService.find(id)
   halt 404, json_error('not found', 404) unless before
@@ -1744,13 +1907,19 @@ class ContactsWeb < Sinatra::Base
     record = UuteService.find(id)
     halt 404, json_error('not found', 404) unless record
 
-    path, filename = UuteActService.build(record, user: current_user)
+    specialist_key = params[:specialist].to_s.strip
+    halt 400, json_error('Укажите, кто вводит акт', 400) if specialist_key.empty?
+
+    user_for_act = UsersService.resolve_switch_act_author(specialist_key)
+    halt 400, json_error('Выберите исполнителя из списка', 400) unless user_for_act
+
+    path, filename = UuteActService.build(record, user: user_for_act)
     audit!(
       action: 'metering_admission_act_download',
       entity_type: 'metering',
       entity_id: id.to_s,
       entity_label: billing_label(record),
-      details: { filename: filename }
+      details: { filename: filename, specialist: user_for_act[:name] }
     )
     send_file path, filename: filename, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', disposition: 'attachment'
   rescue ArgumentError => e
@@ -1807,6 +1976,7 @@ class ContactsWeb < Sinatra::Base
     body = parse_json_body
     result = ArshinService.lookup_for_meter(
       serial: body['serial'],
+      serial_candidates: body['serial_candidates'],
       result_docnum: body['result_docnum'],
       valid_until: body['valid_until'],
       year: body['year'],
@@ -1883,10 +2053,8 @@ class ContactsWeb < Sinatra::Base
   end
 
   delete '/api/billing/sheet/:id' do |id|
+    require_admin!
     halt 503, json_error('billing disabled', 503) unless BillingService.enabled?
-    unless UsersService.admin?(current_user) || BillingService.user_can_create_month_login?(current_user[:login])
-      halt 403, json_error('Недостаточно прав для удаления месяца', 403)
-    end
     ok, result = BillingService.delete_sheet(id.to_i)
     halt 400, json_error(result, 400) unless ok
     audit!(

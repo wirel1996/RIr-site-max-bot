@@ -8,6 +8,10 @@ Set-Location $repoRoot
 bundle install
 if ($LASTEXITCODE -ne 0) { throw 'bundle install failed' }
 
+Write-Host '--- bundle exec rspec ---' -ForegroundColor Cyan
+bundle exec rspec
+if ($LASTEXITCODE -ne 0) { throw 'rspec failed' }
+
 Write-Host '--- npm run build ---' -ForegroundColor Cyan
 Set-Location (Join-Path $PSScriptRoot '')
 npm run build

@@ -7,9 +7,12 @@ require 'tmpdir'
 require 'zip'
 
 require_relative 'water_registry_service'
+require_relative '../storage/app_settings'
 
 module WaterPhoneogramService
   module_function
+
+  LAST_EXPORT_KEY = 'water_phoneogram_last_export'
 
   PROJECT_TEMPLATE_PATH = File.expand_path('../templates/water_phoneogram_template.docx', __dir__)
   TEMPLATE_PATH = ENV.fetch('WATER_PHONEOGRAM_TEMPLATE', PROJECT_TEMPLATE_PATH)
@@ -22,13 +25,47 @@ module WaterPhoneogramService
     'barybin' => 'Барыбин Виктор Алексеевич'
   }.freeze
 
-  def build(payment_from: nil, payment_to: nil, signer: nil)
+  def last_export
+    raw = AppSettings.get(LAST_EXPORT_KEY)
+    return nil unless raw.is_a?(Hash)
+
+    payment_to = raw['payment_to'].to_s.strip
+    return nil if payment_to.empty?
+
+    {
+      payment_from: raw['payment_from'].to_s,
+      payment_to: payment_to,
+      payment_to_ru: format_ru_date(payment_to),
+      phoneogram_number: raw['phoneogram_number'].to_s.strip,
+      document_date: raw['document_date'].to_s.strip,
+      exported_at: raw['exported_at'].to_i
+    }
+  end
+
+  def record_export!(payment_from:, payment_to:, phoneogram_number:, document_date:)
+    AppSettings.set(
+      LAST_EXPORT_KEY,
+      {
+        'payment_from' => payment_from.to_s,
+        'payment_to' => payment_to.to_s,
+        'phoneogram_number' => phoneogram_number.to_s.strip,
+        'document_date' => document_date.to_s.strip,
+        'exported_at' => Time.now.to_i
+      }
+    )
+  end
+
+  def build(payment_from: nil, payment_to: nil, signer: nil, phoneogram_number: nil, document_date: nil)
     raise ArgumentError, 'Шаблон телефонограммы не найден' unless File.exist?(TEMPLATE_PATH)
 
     data = WaterRegistryService.paid_rows(payment_from: payment_from, payment_to: payment_to)
     rows = data[:records]
     raise ArgumentError, 'За выбранный период оплаченных строк не найдено' if rows.empty?
 
+    number = phoneogram_number.to_s.strip
+    raise ArgumentError, 'Укажите номер телефонограммы' if number.empty?
+
+    doc_date = resolve_document_date(document_date)
     date = Date.today
     filename = "Телефонограмма_ГСПО_#{date.strftime('%Y%m%d')}.docx"
     output_path = File.join(Dir.tmpdir, "#{SecureRandom.hex(8)}_#{filename}")
@@ -39,20 +76,34 @@ module WaterPhoneogramService
         source_zip.each do |entry|
           content = entry.get_input_stream.read
           if entry.name == 'word/document.xml'
-            content = patch_document_xml(content.force_encoding('UTF-8'), rows, date, signer_name)
+            content = patch_document_xml(
+              content.force_encoding('UTF-8'),
+              rows,
+              doc_date,
+              signer_name,
+              phoneogram_number: number
+            )
           end
           target_zip.get_output_stream(entry.name) { |stream| stream.write(content) }
         end
       end
     end
 
+    record_export!(
+      payment_from: data[:payment_from],
+      payment_to: data[:payment_to],
+      phoneogram_number: number,
+      document_date: doc_date
+    )
+
     [output_path, filename]
   end
 
-  def patch_document_xml(xml, rows, date, signer_name)
+  def patch_document_xml(xml, rows, header_date_ru, signer_name, phoneogram_number:)
     xml = xml.dup
-    header_date = date.strftime('%d.%m.%Y')
-    xml.sub!(/Телефонограмма №\s*.*?\s*от\s*\d{2}\.\d{2}\.\d{4}/, "Телефонограмма №  от #{header_date}")
+    number = phoneogram_number.to_s.strip
+    header = "Телефонограмма № #{number} от #{header_date_ru}"
+    xml.sub!(/Телефонограмма №\s*.*?\s*от\s*\d{2}\.\d{2}\.\d{4}/, header)
 
     list_xml = rows.each_with_index.map do |row, index|
       point = row[:actual_connection_point].to_s.strip
@@ -103,6 +154,29 @@ module WaterPhoneogramService
     SIGNERS.fetch(key, SIGNERS['fadeev'])
   end
   private_class_method :resolve_signer
+
+  def resolve_document_date(value)
+    text = value.to_s.strip
+    if (m = text.match(/\A(\d{1,2})\.(\d{1,2})\.(\d{4})\z/))
+      return format('%02d.%02d.%04d', m[1].to_i, m[2].to_i, m[3].to_i)
+    end
+    if (d = Date.iso8601(text) rescue nil)
+      return d.strftime('%d.%m.%Y')
+    end
+
+    Date.today.strftime('%d.%m.%Y')
+  end
+  private_class_method :resolve_document_date
+
+  def format_ru_date(value)
+    text = value.to_s.strip
+    return text if text.match?(/\A\d{2}\.\d{2}\.\d{4}\z/)
+
+    Date.iso8601(text).strftime('%d.%m.%Y')
+  rescue ArgumentError, TypeError
+    text
+  end
+  private_class_method :format_ru_date
 
   def patch_signer(xml, signer_name)
     escaped = CGI.escapeHTML(signer_name)

@@ -334,14 +334,99 @@ module UuteService
     offset = page.to_i * PAGE_SIZE
     q = query.to_s.strip
     cat = category.to_s.strip
+    linked_object_ids = q.empty? ? [] : linked_object_ids_for_search(q, category: cat)
     UuteDB.with_db do |db|
-      total = UuteDB.count(db, category: cat, query: q)
-      records = UuteDB.list(db, category: cat, limit: PAGE_SIZE, offset: offset, query: q).map { |row| public_row(row) }
+      total = UuteDB.count(db, category: cat, query: q, object_ids: linked_object_ids)
+      records = UuteDB.list(db, category: cat, limit: PAGE_SIZE, offset: offset, query: q, object_ids: linked_object_ids).map { |row| public_row(row) }
       { category: cat, page: page.to_i, page_size: PAGE_SIZE, total: total, query: q, records: records, last_import: UuteDB.last_import(db) }
     end
   end
 
+  def linked_object_ids_for_search(query, category: nil)
+    tokens = search_tokens_for_linked(query)
+    return [] if tokens.empty?
+
+    broad = tokens.find { |token| token.length > 1 } || tokens.first
+    category = category.to_s.strip
+    ids = []
+
+    ContactsDB.with_db do |db|
+      registry_rows = fetch_registry_object_candidates(db, broad)
+      contact_rows = fetch_contact_object_candidates(db, broad, category: category)
+      if registry_rows.empty? && contact_rows.empty?
+        registry_rows = db.execute('SELECT id, name, address, identifier FROM registry_objects')
+        contact_rows = if category.empty?
+                         db.execute('SELECT object_id, name, consumer, address, postal_address, identifier FROM contacts WHERE object_id IS NOT NULL')
+                       else
+                         db.execute('SELECT object_id, name, consumer, address, postal_address, identifier FROM contacts WHERE category = ? AND object_id IS NOT NULL', [category])
+                       end
+      end
+
+      registry_rows.each do |row|
+        text = [row['name'], row['address'], row['identifier']].join(' ')
+        ids << row['id'].to_i if search_text_matches_tokens?(text, tokens)
+      end
+      contact_rows.each do |row|
+        text = [row['name'], row['consumer'], row['address'], row['postal_address'], row['identifier']].join(' ')
+        ids << row['object_id'].to_i if search_text_matches_tokens?(text, tokens)
+      end
+    end
+
+    ids.select(&:positive?).uniq
+  rescue StandardError
+    []
+  end
+  private_class_method :linked_object_ids_for_search
+
+  def fetch_registry_object_candidates(db, broad)
+    like = "%#{broad}%"
+    db.execute(
+      <<~SQL,
+        SELECT id, name, address, identifier
+        FROM registry_objects
+        WHERE lower_ru(COALESCE(name, '') || ' ' || COALESCE(address, '') || ' ' || COALESCE(identifier, '')) LIKE ?
+        LIMIT 1000
+      SQL
+      [like]
+    )
+  end
+  private_class_method :fetch_registry_object_candidates
+
+  def fetch_contact_object_candidates(db, broad, category:)
+    like = "%#{broad}%"
+    sql = <<~SQL
+      SELECT object_id, name, consumer, address, postal_address, identifier
+      FROM contacts
+      WHERE object_id IS NOT NULL
+        #{category.to_s.empty? ? '' : 'AND category = ?'}
+        AND lower_ru(COALESCE(name, '') || ' ' || COALESCE(consumer, '') || ' ' || COALESCE(address, '') || ' ' || COALESCE(postal_address, '') || ' ' || COALESCE(identifier, '')) LIKE ?
+      LIMIT 1000
+    SQL
+    params = category.to_s.empty? ? [like] : [category.to_s, like]
+    db.execute(sql, params)
+  end
+  private_class_method :fetch_contact_object_candidates
+
+  def search_text_matches_tokens?(text, tokens)
+    compact = search_compact_for_linked(text)
+    tokens.all? { |token| compact.include?(token) }
+  end
+  private_class_method :search_text_matches_tokens?
+
+  def search_tokens_for_linked(value)
+    value.to_s.downcase.scan(/[\p{L}\p{N}]+/u).map { |token| search_compact_for_linked(token) }.reject(&:empty?).uniq.first(12)
+  end
+  private_class_method :search_tokens_for_linked
+
+  def search_compact_for_linked(value)
+    value.to_s.downcase.gsub(/[^\p{L}\p{N}]+/u, '')
+  end
+  private_class_method :search_compact_for_linked
+
   def create(category, attrs)
+    cat = category.to_s.strip
+    raise ArgumentError, 'Неизвестная категория' unless category_exists?(cat)
+
     object_id = attrs['object_id'].to_s.strip
     raise ArgumentError, 'object_id обязателен' if object_id.empty?
 
@@ -349,14 +434,14 @@ module UuteService
     raise ArgumentError, 'registry_object не найден' unless object
 
     allowed = editable_fields
-    values = { 'category' => category.to_s, 'object_id' => object_id.to_i }
+    values = { 'category' => cat, 'object_id' => object_id.to_i }
     attrs.each do |key, value|
       k = key.to_s
       next unless allowed.include?(k)
       values[k] = value.to_s.strip
     end
 
-    values['source_key'] = "manual:#{category}:#{object_id}"
+    values['source_key'] = "manual:#{cat}:#{object_id}"
     values['periods_json'] = JSON.generate([])
     values['raw_json'] = JSON.generate(values)
 
@@ -761,9 +846,10 @@ module UuteService
   end
   module_function :act_delete_audit_action
 
-  def refresh_admit_until_value(attrs)
+  def refresh_admit_until_value(attrs, prefer_output: true)
     out = attrs['date_output_uute'].to_s.strip
-    return out unless out.empty?
+    return out if prefer_output && !out.empty?
+
     computed_nearest_verification(attrs)
   end
   module_function :refresh_admit_until_value
@@ -826,15 +912,21 @@ module UuteService
     values = restore.each_with_object({}) do |(key, value), memo|
       memo[key] = value if allowed.include?(key)
     end
+    act_number_row = batch.find { |row| row[:field].to_s == 'act_number' }
+    deleted_act_number = act_number_row ? act_number_row[:new_value].to_s : ''
+    date_field = ACT_KIND_DATE_FIELD[kind]
+    date_row = batch.find { |row| row[:field].to_s == date_field }
+    deleted_act_date = date_row ? date_row[:new_value].to_s : ''
     apply_act_values_to_db(id, values)
-    row = find(id)
-    merged = row.is_a?(Hash) ? row.transform_keys(&:to_s) : {}
-    admit = refresh_admit_until_value(merged)
-    apply_act_values_to_db(id, { 'admit_until' => admit }) unless admit == merged['admit_until'].to_s
+    release_unified_act_number(
+      category: existing['category'],
+      date_value: deleted_act_date,
+      act_number: deleted_act_number
+    )
     {
       record: find(id),
       act_kind: kind,
-      fields: values.keys + ['admit_until']
+      fields: values.keys
     }
   end
 
@@ -875,8 +967,10 @@ module UuteService
     values['act_number'] = allocate_unified_act_number(category: category, date_value: act_date)
     computed_nearest = computed_nearest_verification(existing.merge(values))
     values['nearest_verification_date'] = computed_nearest unless computed_nearest.empty?
-    unless kind == 'check'
-      values['admit_until'] = refresh_admit_until_value(existing.merge(values))
+    if kind == 'input'
+      values['admit_until'] = refresh_admit_until_value(existing.merge(values), prefer_output: false)
+    elsif kind == 'output'
+      values['admit_until'] = refresh_admit_until_value(existing.merge(values), prefer_output: true)
     end
     apply_act_values_to_db(id, values)
     {
@@ -951,6 +1045,33 @@ module UuteService
     end
   end
   private_class_method :allocate_unified_act_number
+
+  def release_unified_act_number(category:, date_value:, act_number:)
+    number = act_number.to_s.strip.to_i
+    return if number < 1
+
+    year = act_counter_year(date_value)
+    UuteDB.with_db do |db|
+      used_count = db.get_first_value(
+        "SELECT COUNT(*) FROM uute_objects WHERE category = ? AND TRIM(COALESCE(act_number, '')) = ?",
+        [category.to_s, number.to_s]
+      ).to_i
+      next if used_count.positive?
+
+      row = UuteDB.get_act_counter(db, category: category.to_s, kind: ACT_UNIFIED_COUNTER_KIND, year: year)
+      current_next = row ? row['next_number'].to_i : 1
+      next unless current_next > number
+
+      UuteDB.set_act_counter(
+        db,
+        category: category.to_s,
+        kind: ACT_UNIFIED_COUNTER_KIND,
+        year: year,
+        next_number: number
+      )
+    end
+  end
+  private_class_method :release_unified_act_number
 
   def resolve_act_number(category:, kind:, year:, mode:, manual:, start_from:)
     mode = mode.to_s.strip
@@ -1076,7 +1197,7 @@ module UuteService
     db_serial = row[key].to_s.strip
     arshin_serial = item['mi_number'].to_s.strip
     serial_mismatch = nil
-    if !db_serial.empty? && !arshin_serial.empty? && db_serial != arshin_serial
+    if !db_serial.empty? && !arshin_serial.empty? && !serial_matches_arshin?(db_serial, arshin_serial)
       serial_mismatch = { 'serial_key' => key, 'current' => db_serial, 'found' => arshin_serial }
     end
 
@@ -1128,6 +1249,23 @@ module UuteService
       serial_mismatch: serial_mismatch
     }
   end
+
+  def serial_matches_arshin?(db_serial, arshin_serial)
+    db_raw = db_serial.to_s.strip
+    arshin_raw = arshin_serial.to_s.strip
+    return true if db_raw == arshin_raw
+    return false unless arshin_raw.match?(/[\/,;]/)
+
+    db_digits = db_raw.gsub(/\D+/, '').sub(/\A0+/, '')
+    return false if db_digits.empty?
+
+    arshin_raw
+      .split(/[\/,;]+/)
+      .map { |part| part.gsub(/\D+/, '').sub(/\A0+/, '') }
+      .reject(&:empty?)
+      .include?(db_digits)
+  end
+  private_class_method :serial_matches_arshin?
 
   def applicability_true?(value)
     value == true || value.to_s.strip.downcase == 'да'
@@ -1893,6 +2031,65 @@ module UuteService
     token_overlap(left, right) >= 0.55 || left.include?(right) || right.include?(left)
   end
   private_class_method :address_close?
+
+  def category_records
+    UuteDB.with_db { |db| UuteDB.categories(db) }
+  end
+
+  def category_label(category)
+    key = category.to_s
+    UuteDB.with_db do |db|
+      row = UuteDB.category_by_key(db, key)
+      return row['label'].to_s if row && !row['label'].to_s.strip.empty?
+    end
+    UuteDB::CATEGORY_LABELS[key] || key
+  end
+
+  def category_exists?(category)
+    UuteDB.with_db { |db| UuteDB.category_exists?(db, category) }
+  end
+
+  def counts
+    UuteDB.with_db { |db| UuteDB.category_counts(db) }
+  end
+
+  def create_category(attrs)
+    label = attrs['label'].to_s.strip
+    key = attrs['key'].to_s.strip
+    key = slug_for_category(label) if key.empty?
+    sort_order = attrs.key?('sort_order') ? attrs['sort_order'] : nil
+    UuteDB.with_db { |db| UuteDB.create_category(db, key: key, label: label, sort_order: sort_order) }
+  end
+
+  def update_category(key, attrs)
+    UuteDB.with_db { |db| UuteDB.update_category(db, key, attrs) }
+  end
+
+  def delete_category(key)
+    UuteDB.with_db { |db| UuteDB.delete_category(db, key) }
+  end
+
+  def delete_record(id)
+    row = UuteDB.with_db { |db| UuteDB.delete_record(db, id) }
+    raise ArgumentError, 'not found' unless row
+
+    row
+  end
+
+  def slug_for_category(label)
+    text = label.to_s.strip.downcase
+    map = {
+      'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'e',
+      'ж' => 'zh', 'з' => 'z', 'и' => 'i', 'й' => 'y', 'к' => 'k', 'л' => 'l', 'м' => 'm',
+      'н' => 'n', 'о' => 'o', 'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u',
+      'ф' => 'f', 'х' => 'h', 'ц' => 'c', 'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sch',
+      'ы' => 'y', 'э' => 'e', 'ю' => 'yu', 'я' => 'ya', 'ь' => '', 'ъ' => ''
+    }
+    slug = text.chars.map { |ch| map.fetch(ch, ch) }.join
+    slug = slug.gsub(/[^a-z0-9]+/, '_').gsub(/\A_+|_+\z/, '')
+    slug.empty? ? "category_#{Time.now.to_i}" : slug
+  end
+  private_class_method :slug_for_category
 
   def parse_json(value)
     JSON.parse(value.to_s)

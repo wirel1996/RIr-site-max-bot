@@ -4,6 +4,7 @@ import { arshinApi, type ArshinItem } from '../api/arshin'
 import type { MeteringRecord } from '../api/metering'
 import type { ArshinMeterDevice } from './arshinMeterDevices'
 import { getPreferredMitNotation, savePreferredMitNotation } from '../utils/arshinTypePrefs'
+import { buildArshinSerialCandidates } from '../utils/arshinSerialCandidates'
 
 export type { ArshinMeterDevice } from './arshinMeterDevices'
 
@@ -61,9 +62,9 @@ export default function ArshinMeterCheckModal({ open, uuteId, device, record, in
 
   const search = useMutation({
     mutationFn: () => {
-      console.log('[ARSHIN SEARCH] mitNotation:', mitNotation, 'serialKey:', device?.serialKey, 'record keys:', Object.keys(record).filter(k => k.includes('temp')))
       return arshinApi.searchMeter({
         serial: editableSerial.trim(),
+        serial_candidates: editableSerial.trim() === serialFromDb ? buildArshinSerialCandidates(record, device?.serialKey) : undefined,
         result_docnum: resultDocnum.trim() || undefined,
         valid_until: validUntilFromDb || undefined,
         year: year.trim() || undefined,

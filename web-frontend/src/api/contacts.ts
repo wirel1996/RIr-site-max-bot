@@ -17,6 +17,7 @@ export type Contact = {
   identifier: string | null
   metering_presence: string | null
   disconnected: string | null
+  disconnected_date: string | null
   sync_status: string | null
   sync_note: string | null
   source_row: number | null
@@ -62,7 +63,7 @@ export type ContactsSearchResponse = {
 }
 
 export type ContactUpdatePayload = Partial<
-  Pick<Contact, 'name' | 'connection_point' | 'consumer' | 'manager' | 'address' | 'phone' | 'phone_alt' | 'email' | 'postal_address' | 'notes' | 'identifier' | 'metering_presence' | 'disconnected'>
+  Pick<Contact, 'name' | 'connection_point' | 'consumer' | 'manager' | 'address' | 'phone' | 'phone_alt' | 'email' | 'postal_address' | 'notes' | 'identifier' | 'metering_presence' | 'disconnected' | 'disconnected_date'>
 >
 
 export type RegistryObject = {

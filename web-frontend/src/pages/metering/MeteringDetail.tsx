@@ -10,7 +10,9 @@ import { ARSHIN_METER_DEVICES, hasFailedArshinCheck } from '../../components/ars
 import { arshinApi, type ArshinItem } from '../../api/arshin'
 import { meteringApi, type ActKind, type MeteringRecord } from '../../api/metering'
 import { getPreferredMitNotation } from '../../utils/arshinTypePrefs'
+import { buildArshinSerialCandidates } from '../../utils/arshinSerialCandidates'
 import { meteringRu as t } from '../../locales/ru/metering'
+import { useAuth } from '../../contexts/AuthContext'
 import RegistryObjectCard from '../../components/RegistryObjectCard'
 import { exploitationPeriodLabel } from '../../utils/meteringDates'
 import {
@@ -21,7 +23,7 @@ import {
 
 const GROUPS: Array<[string, Array<[keyof MeteringRecord, string]>]> = t.detail.groups
 const OBJECT_FIELDS = new Set<keyof MeteringRecord>(['name', 'address', 'identifier'])
-const ACT_MODAL_SECTIONS = new Set(['Акты и допуск', 'Пломбы', 'Показания'])
+const ACT_MODAL_SECTIONS = new Set(['Акты и допуск', 'Пломбы', 'Интеграторы'])
 
 const CATEGORY_LABELS: Record<string, string> = {
   gspo: 'ГСПО',
@@ -88,6 +90,7 @@ function buildDisplayFields(
 }
 
 export default function MeteringDetail() {
+  const { canDelete } = useAuth()
   const { category, id } = useParams<{ category: string; id: string }>()
   const cat = category ?? 'gspo'
   const navigate = useNavigate()
@@ -169,10 +172,33 @@ export default function MeteringDetail() {
     },
   })
 
+  const deleteRecordMutation = useMutation({
+    mutationFn: () => meteringApi.deleteRecord(cat, Number(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metering'] })
+      navigate(`/metering/${cat}`)
+    },
+  })
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ['metering', 'categories'],
+    queryFn: () => meteringApi.categories(),
+  })
+  const categoryLabel = categoriesData?.categories.find((row) => row.key === cat)?.label
+    || CATEGORY_LABELS[cat]
+    || cat
+
+  const onDeleteRecord = () => {
+    if (!data || !id) return
+    const name = data.name || data.address || data.identifier || `#${id}`
+    const message = `Удалить прибор учета «${name}»?\n\nЭто действие необратимо: будут удалены карточка и все связи с контактами.`
+    if (window.confirm(message)) deleteRecordMutation.mutate()
+  }
+
   const bulkCheckMutation = useMutation({
     mutationFn: async () => {
       if (!id || !data) return []
-      const checks: Array<{
+      type BulkCheckResult = {
         serialKey: ArshinMeterDevice['serialKey']
         label: string
         serial: string
@@ -182,10 +208,13 @@ export default function MeteringDetail() {
         text?: string
         usedPreferred?: boolean
         error?: string
-      }> = []
-      for (const device of ARSHIN_METER_DEVICES) {
-        const serial = String(data[device.serialKey] ?? '').trim()
-        if (!serial) continue
+      }
+      const devices = ARSHIN_METER_DEVICES
+        .map((device) => ({ device, serial: String(data[device.serialKey] ?? '').trim() }))
+        .filter(({ serial }) => serial)
+      const checks: Array<BulkCheckResult | undefined> = []
+      let nextIndex = 0
+      const runCheck = async (device: ArshinMeterDevice, serial: string): Promise<BulkCheckResult> => {
         try {
           const preferred = getPreferredMitNotation(device.serialKey)
           const validUntil = String(data[device.dateKey] ?? '').trim()
@@ -202,13 +231,14 @@ export default function MeteringDetail() {
           const mitNotation = mitNotationField ? String(data[mitNotationField] ?? '').trim() : ''
           const res = await arshinApi.searchMeter({
             serial,
+            serial_candidates: buildArshinSerialCandidates(data, device.serialKey),
             valid_until: validUntil || undefined,
             serial_key: device.serialKey,
             preferred_mit_notation: preferred || undefined,
             mit_notation: mitNotation || undefined,
             meter_label: device.label,
           })
-          checks.push({
+          return {
             serialKey: device.serialKey,
             label: device.label,
             serial,
@@ -217,18 +247,27 @@ export default function MeteringDetail() {
             items: Array.isArray(res.items) ? res.items : [],
             text: res.text,
             usedPreferred: res.used_preferred_type,
-          })
+          }
         } catch (e) {
-          checks.push({
+          return {
             serialKey: device.serialKey,
             label: device.label,
             serial,
             count: 0,
             error: (e as Error).message || t.detail.searchError,
-          })
+          }
         }
       }
-      return checks
+      const workers = Array.from({ length: Math.min(2, devices.length) }, async () => {
+        while (nextIndex < devices.length) {
+          const index = nextIndex
+          nextIndex += 1
+          const { device, serial } = devices[index]
+          checks[index] = await runCheck(device, serial)
+        }
+      })
+      await Promise.all(workers)
+      return checks.filter((item): item is BulkCheckResult => Boolean(item))
     },
     onSuccess: (items) => setBulkResults(items),
   })
@@ -311,18 +350,40 @@ export default function MeteringDetail() {
 
   return (
     <div className="space-y-4">
-      <nav className="flex items-center justify-between text-sm">
-        <Link to={`/metering/${cat}`} className="text-blue-600 hover:underline">
-          ← {CATEGORY_LABELS[cat] || cat}
-        </Link>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded border bg-white px-3 py-1.5 text-gray-700 hover:bg-gray-100"
-        >
-          {t.detail.back}
-        </button>
+      <nav className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-gray-600">
+          <Link to="/objects" className="text-blue-600 hover:underline">Объекты</Link>
+          <span className="mx-1">→</span>
+          <Link to="/metering" className="text-blue-600 hover:underline">Приборы учета</Link>
+          <span className="mx-1">→</span>
+          <Link to={`/metering/${cat}`} className="text-blue-600 hover:underline">{categoryLabel}</Link>
+        </div>
+        <div className="flex gap-2">
+          {canDelete && (
+            <button
+              type="button"
+              disabled={deleteRecordMutation.isPending}
+              onClick={onDeleteRecord}
+              className="rounded border border-red-200 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-40"
+            >
+              {deleteRecordMutation.isPending ? 'Удаление...' : 'Удалить прибор'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="rounded border bg-white px-3 py-1.5 text-gray-700 hover:bg-gray-100"
+          >
+            {t.detail.back}
+          </button>
+        </div>
       </nav>
+
+      {deleteRecordMutation.error && (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          Не удалось удалить прибор: {(deleteRecordMutation.error as Error).message}
+        </div>
+      )}
 
       <div className={`rounded-lg bg-white p-5 shadow ${hasFailedArshinCheck(data) ? 'ring-2 ring-red-400' : ''}`}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -330,11 +391,6 @@ export default function MeteringDetail() {
             <p className="text-xs uppercase text-gray-500">{CATEGORY_LABELS[cat] || cat}</p>
             <h1 className="text-xl font-bold">{data.name || t.detail.noName}</h1>
             <p className="mt-1 text-sm text-gray-600">{data.address}</p>
-            {data.act_number && (
-              <p className="mt-1 text-sm text-gray-700">
-                № акта: <span className="font-medium">{data.act_number}</span>
-              </p>
-            )}
             {hasFailedArshinCheck(data) && (
               <p className="mt-2 text-sm font-medium text-red-700">{t.detail.arshinWarn}</p>
             )}
@@ -391,13 +447,15 @@ export default function MeteringDetail() {
                   {link.status} · {link.match_score ?? '—'} · {link.match_reason || t.detail.manualLink}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => deleteLinkMutation.mutate(contact.id)}
-                className="w-fit rounded border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50"
-              >
-                {t.detail.unlink}
-              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => deleteLinkMutation.mutate(contact.id)}
+                  className="w-fit rounded border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50"
+                >
+                  {t.detail.unlink}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -707,4 +765,3 @@ export default function MeteringDetail() {
     </div>
   )
 }
-

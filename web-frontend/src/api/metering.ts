@@ -372,7 +372,29 @@ export type SubmitActPayload = Partial<MeteringRecord> & {
   extra_temp_indices?: number[]
 }
 
+export type MeteringCategoryInfo = {
+  key: string
+  label: string
+  sort_order: number
+  system: boolean
+  count: number
+}
+
+export type MeteringOverview = {
+  categories: MeteringCategoryInfo[]
+}
+
 export const meteringApi = {
+  overview: () => api.get<MeteringOverview>('/metering/overview'),
+  categories: () => api.get<{ categories: MeteringCategoryInfo[] }>('/metering/categories'),
+  createCategory: (data: { label: string; key?: string; sort_order?: number }) =>
+    api.post<MeteringCategoryInfo>('/metering/categories', data),
+  updateCategory: (key: string, data: { label?: string; sort_order?: number }) =>
+    api.patch<MeteringCategoryInfo>(`/metering/categories/${key}`, data),
+  deleteCategory: (key: string) =>
+    api.delete<{ ok: true; category: MeteringCategoryInfo }>(`/metering/categories/${key}`),
+  deleteRecord: (category: string, id: number) =>
+    api.delete<{ ok: true }>(`/metering/${category}/${id}`),
   list: (category: string, page = 0, query = '') => {
     const params = new URLSearchParams({ page: String(page) })
     if (query.trim()) params.set('q', query.trim())
@@ -385,7 +407,8 @@ export const meteringApi = {
   gspoDetail: (id: number) => meteringApi.detail('gspo', id),
   create: (category: string, payload: CreateMeteringPayload) =>
     api.post<MeteringRecord>(`/metering/${category}`, payload),
-  admissionActUrl: (category: string, id: number) => `/api/metering/${category}/${id}/admission-act`,
+  admissionActUrl: (category: string, id: number, specialist: string) =>
+    `/api/metering/${category}/${id}/admission-act?specialist=${encodeURIComponent(specialist)}`,
   update: (category: string, id: number, payload: Partial<MeteringRecord>) =>
     api.patch<MeteringRecord>(`/metering/${category}/${id}`, payload),
   submitAct: (category: string, id: number, payload: SubmitActPayload) =>
@@ -458,11 +481,30 @@ export const meteringApi = {
     }
     return api.get<WaterRegistryListResponse>(`/metering/water?${params.toString()}`)
   },
-  waterPhoneogramUrl: (paymentFrom = '', paymentTo = '', signer = '') => {
+  waterPhoneogramHistory: () =>
+    api.get<{
+      last_export: {
+        payment_from: string
+        payment_to: string
+        payment_to_ru: string
+        phoneogram_number: string
+        document_date: string
+        exported_at: number
+      } | null
+    }>('/metering/water/phoneogram/history'),
+  waterPhoneogramUrl: (
+    paymentFrom = '',
+    paymentTo = '',
+    signer = '',
+    phoneogramNumber = '',
+    documentDate = '',
+  ) => {
     const params = new URLSearchParams()
     if (paymentFrom.trim()) params.set('payment_from', paymentFrom.trim())
     if (paymentTo.trim()) params.set('payment_to', paymentTo.trim())
     if (signer.trim()) params.set('signer', signer.trim())
+    if (phoneogramNumber.trim()) params.set('phoneogram_number', phoneogramNumber.trim())
+    if (documentDate.trim()) params.set('document_date', documentDate.trim())
     return `/api/metering/water/phoneogram?${params.toString()}`
   },
   waterDetail: (id: number) => api.get<WaterRegistryRecord>(`/metering/water/${id}`),

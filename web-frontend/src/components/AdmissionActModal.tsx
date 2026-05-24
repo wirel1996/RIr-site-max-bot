@@ -30,20 +30,8 @@ function ReadingsFields({
   setReadingQ,
   readingM1,
   setReadingM1,
-  readingV1,
-  setReadingV1,
   readingM2,
   setReadingM2,
-  readingV2,
-  setReadingV2,
-  readingT1,
-  setReadingT1,
-  readingT2,
-  setReadingT2,
-  readingP1,
-  setReadingP1,
-  readingP2,
-  setReadingP2,
   showAccepted,
   acceptedBy,
   setAcceptedBy,
@@ -54,20 +42,8 @@ function ReadingsFields({
   setReadingQ: (v: string) => void
   readingM1: string
   setReadingM1: (v: string) => void
-  readingV1: string
-  setReadingV1: (v: string) => void
   readingM2: string
   setReadingM2: (v: string) => void
-  readingV2: string
-  setReadingV2: (v: string) => void
-  readingT1: string
-  setReadingT1: (v: string) => void
-  readingT2: string
-  setReadingT2: (v: string) => void
-  readingP1: string
-  setReadingP1: (v: string) => void
-  readingP2: string
-  setReadingP2: (v: string) => void
   showAccepted?: boolean
   acceptedBy?: string
   setAcceptedBy?: (v: string) => void
@@ -85,13 +61,7 @@ function ReadingsFields({
       {(
         [
           ['M1', readingM1, setReadingM1],
-          ['V1', readingV1, setReadingV1],
           ['M2', readingM2, setReadingM2],
-          ['V2', readingV2, setReadingV2],
-          ['t1', readingT1, setReadingT1],
-          ['t2', readingT2, setReadingT2],
-          ['P1', readingP1, setReadingP1],
-          ['P2', readingP2, setReadingP2],
         ] as const
       ).map(([label, val, setVal]) => (
         <label key={label} className="text-xs">
@@ -101,7 +71,7 @@ function ReadingsFields({
       ))}
       {showAccepted && setAcceptedBy && (
         <label className="text-xs sm:col-span-2">
-          Принял
+          Кто вводил
           <input value={acceptedBy ?? ''} onChange={(e) => setAcceptedBy(e.target.value)} className="mt-0.5 w-full rounded border px-2 py-1 text-sm" />
         </label>
       )}
@@ -369,7 +339,11 @@ export default function AdmissionActModal({ open, kind, category, recordId, reco
                 </label>
                 <label className="text-xs">
                   Проект
-                  <input value={project} onChange={(e) => setProject(e.target.value)} className="mt-0.5 w-full rounded border px-2 py-1 text-sm" />
+                  <select value={project} onChange={(e) => setProject(e.target.value)} className="mt-0.5 w-full rounded border px-2 py-1 text-sm">
+                    <option value="">—</option>
+                    <option value="да">{t.detail.yes}</option>
+                    <option value="нет">{t.detail.no}</option>
+                  </select>
                 </label>
                 <label className="text-xs sm:col-span-2">
                   Нарушения
@@ -543,7 +517,7 @@ export default function AdmissionActModal({ open, kind, category, recordId, reco
 
           {(isInput || isCheck || isOutput) && (
             <section>
-              <h3 className="mb-2 text-sm font-semibold">Показания</h3>
+              <h3 className="mb-2 text-sm font-semibold">Интеграторы</h3>
               <ReadingsFields
                 readingsDate={readingsDate}
                 setReadingsDate={setReadingsDate}
@@ -551,21 +525,9 @@ export default function AdmissionActModal({ open, kind, category, recordId, reco
                 setReadingQ={setReadingQ}
                 readingM1={readingM1}
                 setReadingM1={setReadingM1}
-                readingV1={readingV1}
-                setReadingV1={setReadingV1}
                 readingM2={readingM2}
                 setReadingM2={setReadingM2}
-                readingV2={readingV2}
-                setReadingV2={setReadingV2}
-                readingT1={readingT1}
-                setReadingT1={setReadingT1}
-                readingT2={readingT2}
-                setReadingT2={setReadingT2}
-                readingP1={readingP1}
-                setReadingP1={setReadingP1}
-                readingP2={readingP2}
-                setReadingP2={setReadingP2}
-                showAccepted={isOutput}
+                showAccepted
                 acceptedBy={acceptedBy}
                 setAcceptedBy={setAcceptedBy}
               />

@@ -11,6 +11,11 @@ require_relative 'arshin_type_priority'
 module ArshinService
   module_function
 
+  @request_cache = {}
+  @request_cache_mutex = Mutex.new
+  @profile_mutex = Mutex.new
+  @profile_seq = 0
+
   def enabled?
     (ENV['ARSHIN_ENABLED'] || '1').to_s.strip == '1'
   end
@@ -23,6 +28,10 @@ module ArshinService
     (ENV['ARSHIN_TIMEOUT_SECONDS'] || '15').to_i
   end
 
+  def request_cache_seconds
+    (ENV['ARSHIN_REQUEST_CACHE_SECONDS'] || '120').to_i
+  end
+
   def result_limit
     (ENV['ARSHIN_RESULT_LIMIT'] || '5').to_i
   end
@@ -31,8 +40,16 @@ module ArshinService
     (ENV['ARSHIN_DEBUG'] || '0').to_s.strip == '1'
   end
 
+  def profile_enabled?
+    (ENV['ARSHIN_PROFILE'] || '1').to_s.strip == '1'
+  end
+
   def log_path
     File.expand_path((ENV['ARSHIN_LOG_PATH'] || '../log/arshin.log').to_s, __dir__)
+  end
+
+  def profile_log_path
+    File.expand_path((ENV['ARSHIN_PROFILE_LOG_PATH'] || '../log/arshin_timing.log').to_s, __dir__)
   end
 
   def type_api_keys
@@ -77,6 +94,14 @@ module ArshinService
   rescue => e
     puts "arshin_log error: #{e.class}: #{e.message}"
   end
+
+  def next_trace_id(prefix = 'arshin')
+    @profile_mutex.synchronize do
+      @profile_seq += 1
+      "#{prefix}-#{Time.now.utc.strftime('%Y%m%d%H%M%S')}-#{@profile_seq}"
+    end
+  end
+  private_class_method :next_trace_id
 
   def utf8_text(value)
     text = value.to_s.dup
@@ -286,15 +311,18 @@ module ArshinService
     (preferred_years.map(&:to_s) + fallback_years).uniq
   end
 
-  def lookup_for_meter(serial:, valid_until: nil, year: nil, org_title: nil, mit_notation: nil, meter_label: nil, preferred_mit_notation: nil, serial_key: nil, result_docnum: nil)
+  def lookup_for_meter(serial:, serial_candidates: nil, valid_until: nil, year: nil, org_title: nil, mit_notation: nil, meter_label: nil, preferred_mit_notation: nil, serial_key: nil, result_docnum: nil)
     lookup_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    trace_id = next_trace_id('meter')
     return { text: 'Интеграция АРШИН отключена (ARSHIN_ENABLED=0).', items: [], years_tried: [], suggested_years: [], used_preferred_type: false } unless enabled?
 
     number = utf8_text(serial).strip
     mit_notation = utf8_text(mit_notation).strip
-    STDERR.puts "[ARSHIN LOOKUP] serial=#{number.inspect}, mit_notation=#{mit_notation.inspect}, serial_key=#{serial_key.inspect}"
+    extra_serial_candidates = Array(serial_candidates).map { |value| utf8_text(value).strip }.reject(&:empty?).uniq
+    profile_log('lookup_input', trace_id: trace_id, serial: number, serial_candidates: extra_serial_candidates.join('|'), mit: mit_notation, serial_key: serial_key, valid_until: valid_until, year: year, org: org_title, doc: result_docnum)
     doc_number = result_docnum.to_s.strip
     if number.empty? && doc_number.empty?
+      profile_log('lookup_done', trace_id: trace_id, result: 'empty_input', ms: elapsed_ms(lookup_started_at))
       return { text: 'Укажите заводской номер прибора или номер свидетельства.', items: [], years_tried: [], suggested_years: [], used_preferred_type: false }
     end
 
@@ -308,11 +336,14 @@ module ArshinService
 
     org_for_search = org_title.to_s.strip
 
-    profile_log('lookup_start', serial_key: serial_key, serial: number, mit: mit_notation, years: suggested_years.join(','), org: org_for_search)
+    family = ArshinTypePriority.family_by_serial_key(serial_key)
+    ktptr_search = family == 'temp_sensor' && mit_notation.match?(/КТПТР|KTPTR/i)
+    use_type_api = ktptr_search
+    profile_log('lookup_start', trace_id: trace_id, serial_key: serial_key, family: family, serial: number, mit: mit_notation, years: suggested_years.join(','), org: org_for_search)
 
     if number.empty? && !doc_number.empty?
-      result = _search_by_doc_years(doc_number, suggested_years, org_for_search, meter_label, year)
-      profile_log('lookup_done', serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
+      result = _search_by_doc_years(doc_number, suggested_years, org_for_search, meter_label, year, trace_id: trace_id)
+      profile_log('lookup_done', trace_id: trace_id, serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
       return result.merge(used_preferred_type: false)
     end
 
@@ -322,10 +353,12 @@ module ArshinService
     pool = ArshinTypePriority.pool_for(serial_key)
     pool = [preferred] + pool if use_preferred
     pool = pool.map(&:to_s).map(&:strip).reject(&:empty?).uniq
+    profile_log('lookup_pool', trace_id: trace_id, serial_key: serial_key, use_preferred: use_preferred, preferred: preferred, pool_size: pool.size, pool: pool.join('|'))
 
     # Сначала ищем строго по пулу приоритетных типов. Иначе общий поиск по номеру
     # может поймать чужой прибор в более свежем году и не дойти до правильного года.
-    if use_preferred || !pool.empty?
+    if use_type_api
+      profile_log('lookup_phase_start', trace_id: trace_id, phase: 'targeted_by_type')
       targeted = _meter_search_by_years(
         number,
         suggested_years,
@@ -337,26 +370,56 @@ module ArshinService
         preferred_filter_list: pool,
         preferred_rank_list: pool,
         target_valid_until: valid_until,
-        serial_key: serial_key
+        serial_key: serial_key,
+        trace_id: trace_id,
+        phase: 'targeted_by_type',
+        org_rank: org_for_search,
+        use_org_in_api: false,
+        extra_number_candidates: extra_serial_candidates
       )
-      return targeted.merge(used_preferred_type: true) unless Array(targeted[:items]).empty?
+      unless Array(targeted[:items]).empty?
+        profile_log('lookup_done', trace_id: trace_id, phase: 'targeted_by_type', serial_key: serial_key, serial: number, items: Array(targeted[:items]).size, years_tried: Array(targeted[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
+        return targeted.merge(used_preferred_type: true)
+      end
 
       # Если по типам ничего не найдено, возвращаемся к широкому поиску по номеру,
       # но найденные типы все равно поднимаем выше в выдаче.
-      result = _meter_search_by_years(number, suggested_years, org_for_search, mit_notation, meter_label, year, max_rows: 50, preferred_rank_list: pool, target_valid_until: valid_until, serial_key: serial_key)
+      profile_log('lookup_phase_start', trace_id: trace_id, phase: 'wide_by_number')
+      result = _meter_search_by_years(number, suggested_years, org_for_search, mit_notation, meter_label, year, max_rows: 50, preferred_rank_list: pool, target_valid_until: valid_until, serial_key: serial_key, trace_id: trace_id, phase: 'wide_by_number', org_rank: org_for_search, use_org_in_api: false, extra_number_candidates: extra_serial_candidates)
       used = Array(result[:items]).any? { |it| pool.any? { |p| arshin_item_matches_type?(it, p) } }
+      profile_log('lookup_done', trace_id: trace_id, phase: 'wide_by_number', serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), used_preferred_type: used, ms: elapsed_ms(lookup_started_at))
       return result.merge(used_preferred_type: used)
     end
 
     # Обычный поиск без preferred
-    result = _meter_search_by_years(number, suggested_years, org_for_search, mit_notation, meter_label, year, target_valid_until: valid_until, serial_key: serial_key)
-    profile_log('lookup_done', serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
+    result = _meter_search_by_years(
+      number,
+      suggested_years,
+      org_for_search,
+      mit_notation,
+      meter_label,
+      year,
+      max_rows: 100,
+      return_limit: result_limit,
+      preferred_rank_list: pool,
+      target_valid_until: valid_until,
+      serial_key: serial_key,
+      trace_id: trace_id,
+      phase: 'number_first',
+      org_rank: org_for_search,
+      use_org_in_api: false,
+      use_type_in_api: false,
+      extra_number_candidates: extra_serial_candidates
+    )
+    profile_log('lookup_done', trace_id: trace_id, serial_key: serial_key, serial: number, items: Array(result[:items]).size, years_tried: Array(result[:years_tried]).join(','), ms: elapsed_ms(lookup_started_at))
     result.merge(used_preferred_type: false)
   end
 
-  def _search_by_doc_years(doc_number, suggested_years, org_title, meter_label, year_hint)
+  def _search_by_doc_years(doc_number, suggested_years, org_title, meter_label, year_hint, trace_id: nil)
+    search_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     years_tried = []
     last_text = nil
+    profile_log('doc_search_start', trace_id: trace_id, doc: doc_number, years: suggested_years.join(','), org: org_title)
 
     suggested_years.each_with_index do |y, idx|
       sleep(0.6) if idx.positive?
@@ -365,15 +428,17 @@ module ArshinService
       org = org_title.to_s.strip
       params['org_title'] = org unless org.empty?
 
-      items, error = arshin_fetch_items_by_params(params, return_full: true, max_rows: 50)
+      items, error = arshin_fetch_items_by_params(params, return_full: true, max_rows: 50, trace_id: trace_id, phase: "doc_year_#{y}")
       if error
         last_text = "❌ #{error}"
+        profile_log('doc_year_error', trace_id: trace_id, year: y, error: error)
         next
       end
 
       filtered = Array(items).select do |item|
         item['result_docnum'].to_s.downcase.include?(doc_number.downcase)
       end
+      profile_log('doc_year_done', trace_id: trace_id, year: y, items: Array(items).size, filtered: filtered.size)
       next if filtered.empty?
 
       filtered = with_registry_links(filtered.map { |item| item.merge('_year' => y) })
@@ -383,7 +448,11 @@ module ArshinService
       header << "Год поиска: #{y}#{year_hint.to_s.strip.empty? ? ' (авто)' : ''}"
       header << "Поверитель: #{org}" unless org.empty?
       header << ''
-      link = shorten_url(registry_link_for_serial(doc_number, year: y))
+      full_link = registry_link_for_serial(doc_number, year: y)
+      shortlink_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      link = shorten_url(full_link)
+      profile_log('shortlink_done', trace_id: trace_id, phase: 'doc_search', changed: link != full_link, ms: elapsed_ms(shortlink_started_at), url: full_link)
+      profile_log('doc_search_done', trace_id: trace_id, result: 'hit', year: y, items: filtered.size, years_tried: years_tried.join(','), ms: elapsed_ms(search_started_at))
       return {
         text: (header + ["Найдено #{filtered.size} записей", "Проверить на АРШИН: #{link}"]).join("\n"),
         items: filtered.first(result_limit),
@@ -394,6 +463,7 @@ module ArshinService
     end
 
     years_line = years_tried.empty? ? '—' : years_tried.join(', ')
+    profile_log('doc_search_done', trace_id: trace_id, result: 'empty', years_tried: years_line, ms: elapsed_ms(search_started_at))
     {
       text: "🔎 По свидетельству №#{doc_number} ничего не найдено (годы: #{years_line}).\n#{last_text}",
       items: [],
@@ -404,12 +474,13 @@ module ArshinService
   end
   private_class_method :_search_by_doc_years
 
-  def _meter_search_by_years(number, suggested_years, org_title, mit_notation, meter_label, year_hint, max_rows: nil, preferred_filter: nil, preferred_filter_list: nil, preferred_rank: nil, preferred_rank_list: nil, target_valid_until: nil, serial_key: nil)
+  def _meter_search_by_years(number, suggested_years, org_title, mit_notation, meter_label, year_hint, max_rows: nil, return_limit: nil, preferred_filter: nil, preferred_filter_list: nil, preferred_rank: nil, preferred_rank_list: nil, target_valid_until: nil, serial_key: nil, trace_id: nil, phase: nil, org_rank: nil, use_org_in_api: true, use_type_in_api: true, extra_number_candidates: nil)
+    search_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     years_tried = []
     last_text = nil
-    fallback_link = shorten_url(registry_link_for_serial(number, year: year_hint.to_s.strip.empty? ? nil : year_hint.to_s.strip))
     raw_number_for_query = utf8_text(number).strip
-    number_candidates = [raw_number_for_query]
+    extra_candidates = Array(extra_number_candidates).map { |value| utf8_text(value).strip }.reject(&:empty?)
+    number_candidates = extra_candidates + [raw_number_for_query]
     compact_number_for_query = raw_number_for_query.dup.force_encoding('UTF-8').downcase.gsub(/\s+/, '')
     safe_mit_notation = utf8_text(mit_notation).strip
     temp_sensor_key = serial_key.to_s.start_with?('temp_sensor_serial_')
@@ -421,20 +492,23 @@ module ArshinService
         number_candidates.unshift("#{base}/#{base}А")
         number_candidates << base unless base == compact_number_for_query
       end
-      STDERR.puts "[ARSHIN KTPTR] is_ktptr=#{is_ktptr}, input=#{compact_number_for_query.inspect}, base=#{base.inspect}, candidates=#{number_candidates.inspect}"
+      profile_log('number_candidates_ktptr', trace_id: trace_id, phase: phase, input: compact_number_for_query, base: base, candidates: number_candidates.join('|'))
     elsif !is_ktptr
       return_non_ktptr_log = temp_sensor_key
-      STDERR.puts "[ARSHIN KTPTR] is_ktptr=#{is_ktptr}, mit_notation=#{safe_mit_notation.inspect}" if return_non_ktptr_log
+      profile_log('number_candidates_temp_default', trace_id: trace_id, phase: phase, mit: safe_mit_notation) if return_non_ktptr_log
       paired_base =
-        if compact_number_for_query.match?(/\A\d+[гх]\z/)
+        if temp_sensor_key && compact_number_for_query.match?(/\A\d+[гх]\z/)
           compact_number_for_query.sub(/[гх]\z/, '')
-        elsif compact_number_for_query.match?(/\A\d+\z/)
+        elsif temp_sensor_key && compact_number_for_query.match?(/\A\d+\z/)
           compact_number_for_query
         end
       unless paired_base.to_s.empty?
         number_candidates << paired_base
         number_candidates << "#{paired_base} г/х"
         number_candidates << "#{paired_base}г/х"
+      end
+      if temp_sensor_key && compact_number_for_query.match?(/\A\d+[гх]\z/) && !paired_base.to_s.empty?
+        number_candidates = ["#{paired_base} г/х", paired_base, "#{paired_base}г/х", raw_number_for_query] + number_candidates
       end
     end
     if ArshinTypePriority.family_by_serial_key(serial_key) == 'pressure_sensor'
@@ -445,26 +519,43 @@ module ArshinService
       end
     end
     number_candidates = number_candidates.map(&:strip).reject(&:empty?).uniq
+    profile_log(
+      'meter_search_start',
+      trace_id: trace_id,
+      phase: phase,
+      serial_key: serial_key,
+      number: raw_number_for_query,
+      candidates: number_candidates.join('|'),
+      years: suggested_years.join(','),
+      max_rows: max_rows || result_limit,
+      preferred_filter_count: Array(preferred_filter_list).size + (preferred_filter.to_s.strip.empty? ? 0 : 1),
+      preferred_rank_count: Array(preferred_rank_list).size + (preferred_rank.to_s.strip.empty? ? 0 : 1)
+    )
 
     suggested_years.each_with_index do |y, idx|
+      year_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       sleep(0.6) if idx.positive?
       year_items = []
+      profile_log('meter_year_start', trace_id: trace_id, phase: phase, year: y, candidates: number_candidates.size)
       number_candidates.each do |candidate_number|
+        candidate_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         form = { 'mi_number' => candidate_number, 'year' => y }
         org = org_title.to_s.strip
-        form['org_title'] = org unless org.empty?
+        form['org_title'] = org if use_org_in_api && !org.empty?
         notation = safe_mit_notation
-        form['mit_notation'] = notation unless notation.empty?
+        form['mit_notation'] = notation if use_type_in_api && !notation.empty?
 
-        items, error = arshin_fetch_items_by_params(form, return_full: true, max_rows: max_rows)
+        items, error = arshin_fetch_items_by_params(form, return_full: true, max_rows: max_rows, trace_id: trace_id, phase: "#{phase || 'meter'}:#{y}:#{candidate_number}")
         years_tried << y unless years_tried.include?(y)
 
         if error
           last_text = "❌ #{error}"
+          profile_log('meter_candidate_error', trace_id: trace_id, phase: phase, year: y, candidate: candidate_number, error: error, ms: elapsed_ms(candidate_started_at))
           next
         end
 
         last_text = "Найдено #{items.size} записей"
+        before_preferred_count = Array(items).size
 
         # Клиентская фильтрация по preferred типу
         preferred_filters = Array(preferred_filter_list).map { |v| utf8_text(v).strip }.reject(&:empty?)
@@ -472,13 +563,26 @@ module ArshinService
         unless preferred_filters.empty?
           items = items.select { |item| preferred_filters.any? { |type_name| arshin_item_matches_type?(item, type_name) } }
         end
+        profile_log(
+          'meter_candidate_done',
+          trace_id: trace_id,
+          phase: phase,
+          year: y,
+          candidate: candidate_number,
+          items_before_preferred: before_preferred_count,
+          items_after_preferred: Array(items).size,
+          preferred_filters: preferred_filters.join('|'),
+          ms: elapsed_ms(candidate_started_at)
+        )
 
         next if items.nil? || items.empty?
         items.each do |item|
           year_items << item.merge('_year' => y, '_query_number' => candidate_number)
         end
+        break if !use_type_in_api && !year_items.empty?
       end
 
+      profile_log('meter_year_done', trace_id: trace_id, phase: phase, year: y, collected: year_items.size, ms: elapsed_ms(year_started_at))
       next if year_items.empty?
 
       # Дедуп и ранжирование:
@@ -501,6 +605,7 @@ module ArshinService
       raw_number = utf8_text(number).strip.downcase
       raw_number_compact = raw_number.gsub(/[^[:alnum:]]+/, '')
       target_valid_date = parse_meter_date(target_valid_until)
+      org_rank_value = utf8_text(org_rank || org_title).strip
       preferred_rank_value = utf8_text(preferred_rank).strip
       preferred_rank_values = Array(preferred_rank_list).map { |v| utf8_text(v).strip }.reject(&:empty?).uniq
       merged.sort_by! do |item|
@@ -523,18 +628,22 @@ module ArshinService
           else
             0
           end
+        org_match = arshin_item_matches_org?(item, org_rank_value) ? 0 : 1
         date_weight =
           begin
             -Date.strptime(item['verification_date'].to_s, '%d.%m.%Y').jd
           rescue StandardError
             0
           end
-        [preferred_type, valid_match, suffix, exact, date_weight]
+        [preferred_type, org_match, valid_match, suffix, exact, date_weight]
       end
 
-      limit = (max_rows || result_limit).to_i
+      limit = (return_limit || max_rows || result_limit).to_i
       merged = with_registry_links(merged.first(limit))
-      link = shorten_url(registry_link_for_serial(number, year: y))
+      full_link = registry_link_for_serial(number, year: y)
+      shortlink_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      link = shorten_url(full_link)
+      profile_log('shortlink_done', trace_id: trace_id, phase: phase, changed: link != full_link, ms: elapsed_ms(shortlink_started_at), url: full_link)
       header = []
       safe_meter_label = utf8_text(meter_label).strip
       safe_number = utf8_text(number).strip
@@ -548,6 +657,7 @@ module ArshinService
       end
       header << ''
 
+      profile_log('meter_search_done', trace_id: trace_id, phase: phase, result: 'hit', year: y, merged: merged.size, years_tried: years_tried.join(','), ms: elapsed_ms(search_started_at))
       return {
         text: (header + ["Найдено #{merged.size} записей", "Проверить на АРШИН: #{link}"]).join("\n"),
         items: merged,
@@ -558,6 +668,11 @@ module ArshinService
     end
 
     years_line = years_tried.empty? ? '—' : years_tried.join(', ')
+    full_fallback_link = registry_link_for_serial(number, year: year_hint.to_s.strip.empty? ? nil : year_hint.to_s.strip)
+    shortlink_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    fallback_link = shorten_url(full_fallback_link)
+    profile_log('shortlink_done', trace_id: trace_id, phase: phase, changed: fallback_link != full_fallback_link, ms: elapsed_ms(shortlink_started_at), url: full_fallback_link)
+    profile_log('meter_search_done', trace_id: trace_id, phase: phase, result: 'empty', years_tried: years_line, last_text: last_text, ms: elapsed_ms(search_started_at))
     {
       text: "🔎 По №#{number} ничего не найдено (годы: #{years_line}).\n#{last_text}\nПроверить на АРШИН: #{fallback_link}",
       items: [],
@@ -648,20 +763,47 @@ module ArshinService
   end
   private_class_method :arshin_http_client
 
-  def arshin_execute_request(uri)
+  def arshin_execute_request(uri, trace_id: nil, label: nil)
+    cache_ttl = request_cache_seconds
+    cache_key = uri.to_s
+    if cache_ttl.positive?
+      cached = @request_cache_mutex.synchronize do
+        entry = @request_cache[cache_key]
+        if entry && entry[:expires_at].to_f > Time.now.to_f
+          entry[:response]
+        else
+          @request_cache.delete(cache_key)
+          nil
+        end
+      end
+      if cached
+        profile_log('http_cache_hit', trace_id: trace_id, label: label, http: cached.code, bytes: cached.body.to_s.bytesize, uri: cache_key)
+        return cached
+      end
+    end
+
+    http_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     http = arshin_http_client(uri)
     http.use_ssl = (uri.scheme == 'https')
     http.open_timeout = timeout_seconds
     http.read_timeout = timeout_seconds
     res = http.request(Net::HTTP::Get.new(uri))
     if res.code == '429'
-      log("rate_limited sleeping=0.6s uri=#{uri}")
+      profile_log('http_rate_limited', trace_id: trace_id, label: label, sleeping_ms: 600, uri: cache_key)
       sleep(0.6)
       http2 = arshin_http_client(uri)
       http2.use_ssl = (uri.scheme == 'https')
       http2.open_timeout = timeout_seconds
       http2.read_timeout = timeout_seconds
       res = http2.request(Net::HTTP::Get.new(uri))
+    end
+    profile_log('http_done', trace_id: trace_id, label: label, cache: 'miss', http: res.code, bytes: res.body.to_s.bytesize, ms: elapsed_ms(http_started_at), uri: cache_key)
+    if cache_ttl.positive? && res.is_a?(Net::HTTPSuccess)
+      @request_cache_mutex.synchronize do
+        now = Time.now.to_f
+        @request_cache.delete_if { |_key, entry| entry[:expires_at].to_f <= now } if @request_cache.size > 500
+        @request_cache[cache_key] = { response: res, expires_at: now + cache_ttl }
+      end
     end
     res
   end
@@ -722,6 +864,26 @@ module ArshinService
   end
   private_class_method :arshin_item_matches_type?
 
+  def arshin_normalized_match_text(value)
+    utf8_text(value)
+      .downcase
+      .tr('«»', '""')
+      .gsub(/["'`]+/, '')
+      .gsub(/[^\p{L}\p{N}]+/, '')
+  end
+  private_class_method :arshin_normalized_match_text
+
+  def arshin_item_matches_org?(item, org_title)
+    expected = arshin_normalized_match_text(org_title)
+    return true if expected.empty?
+
+    actual = arshin_normalized_match_text(item['org_title'])
+    return false if actual.empty?
+
+    actual.include?(expected) || expected.include?(actual)
+  end
+  private_class_method :arshin_item_matches_org?
+
   def arshin_mi_number_variants(mi_number)
     raw = mi_number.to_s.strip
     return [nil] if raw.empty?
@@ -764,7 +926,8 @@ module ArshinService
   end
   private_class_method :arshin_item_matches_number?
 
-  def arshin_fetch_items_by_params(params, return_full: false, max_rows: nil)
+  def arshin_fetch_items_by_params(params, return_full: false, max_rows: nil, trace_id: nil, phase: nil)
+    trace_id ||= next_trace_id('fetch')
     fetch_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     req_total = 0
     req_ok = 0
@@ -842,6 +1005,18 @@ module ArshinService
     fallback_param_variants = fallback_number_variants.empty? ? [] : build_param_variants.call(fallback_number_variants)
     search_passes = [primary_param_variants]
     search_passes << fallback_param_variants unless fallback_param_variants.empty?
+    profile_log(
+      'fetch_start',
+      trace_id: trace_id,
+      phase: phase,
+      rows: effective_limit,
+      return_full: return_full,
+      type_filter: type_filter,
+      org_variants: org_variants.size,
+      number_variants: number_variants.join('|'),
+      primary_variants: primary_param_variants.size,
+      fallback_variants: fallback_param_variants.size
+    )
 
     fallback_scan_rows = 100
     last_error = nil
@@ -853,12 +1028,12 @@ module ArshinService
       param_variants.each_with_index do |query_params, idx|
         uri = URI(api_base_url)
         uri.query = URI.encode_www_form(query_params)
-        log("request[pass=#{pass_idx + 1} #{idx + 1}/#{param_variants.size}] #{uri}")
+        label = "pass#{pass_idx + 1}.#{idx + 1}/#{param_variants.size}"
+        profile_log('fetch_request', trace_id: trace_id, phase: phase, label: label, params: query_params.inspect)
 
-        res = arshin_execute_request(uri)
+        res = arshin_execute_request(uri, trace_id: trace_id, label: "#{phase}:#{label}")
         req_total += 1
         body = res.body.to_s.force_encoding('UTF-8')
-        log("response[pass=#{pass_idx + 1} #{idx + 1}] http=#{res.code} bytes=#{body.bytesize}")
 
         unless res.is_a?(Net::HTTPSuccess)
           req_err += 1
@@ -875,27 +1050,31 @@ module ArshinService
         parsed = JSON.parse(body)
         req_ok += 1
         items = parsed.dig('result', 'items')
-        log("response[pass=#{pass_idx + 1} #{idx + 1}] items_count=#{items.is_a?(Array) ? items.size : 'not_array'}")
+        profile_log('fetch_response', trace_id: trace_id, phase: phase, label: label, http: res.code, items: items.is_a?(Array) ? items.size : 'not_array')
         return [[], nil] unless items.is_a?(Array)
 
         had_success_response = true
         next if items.empty?
 
         if type_filter.empty?
+          profile_log('fetch_done', trace_id: trace_id, phase: phase, result: 'hit_no_type_filter', req_total: req_total, req_ok: req_ok, req_err: req_err, items: items.size, returned: [items.size, effective_limit.to_i].min, ms: elapsed_ms(fetch_started_at))
           return [return_full ? items : items.first(effective_limit), nil]
         end
 
         filtered = items.select { |item| arshin_item_matches_type?(item, type_filter) }
-        log("response[pass=#{pass_idx + 1} #{idx + 1}] filtered_count=#{filtered.size} type=#{type_filter.inspect}")
-        return [filtered.first(effective_limit), nil] unless filtered.empty?
+        profile_log('fetch_filter', trace_id: trace_id, phase: phase, label: label, type: type_filter, before: items.size, after: filtered.size)
+        unless filtered.empty?
+          profile_log('fetch_done', trace_id: trace_id, phase: phase, result: 'hit_type_filter', req_total: req_total, req_ok: req_ok, req_err: req_err, items: items.size, filtered: filtered.size, returned: [filtered.size, effective_limit.to_i].min, ms: elapsed_ms(fetch_started_at))
+          return [filtered.first(effective_limit), nil]
+        end
+        next if fallback_scan_rows <= effective_limit.to_i
 
         scan_uri = URI(api_base_url)
         scan_uri.query = URI.encode_www_form(query_params.merge('rows' => fallback_scan_rows))
-        scan_res = arshin_execute_request(scan_uri)
+        scan_res = arshin_execute_request(scan_uri, trace_id: trace_id, label: "#{phase}:#{label}:scan#{fallback_scan_rows}")
         req_total += 1
 
         scan_body = scan_res.body.to_s.force_encoding('UTF-8')
-        log("scan[pass=#{pass_idx + 1} #{idx + 1}] http=#{scan_res.code} rows=#{fallback_scan_rows} bytes=#{scan_body.bytesize}")
         unless scan_res.is_a?(Net::HTTPSuccess)
           req_err += 1
           next
@@ -907,8 +1086,11 @@ module ArshinService
         next unless scan_items.is_a?(Array) && !scan_items.empty?
 
         scan_filtered = scan_items.select { |item| arshin_item_matches_type?(item, type_filter) }
-        log("scan[pass=#{pass_idx + 1} #{idx + 1}] items_count=#{scan_items.size} filtered_count=#{scan_filtered.size}")
-        return [scan_filtered.first(effective_limit), nil] unless scan_filtered.empty?
+        profile_log('fetch_scan_filter', trace_id: trace_id, phase: phase, label: label, rows: fallback_scan_rows, before: scan_items.size, after: scan_filtered.size)
+        unless scan_filtered.empty?
+          profile_log('fetch_done', trace_id: trace_id, phase: phase, result: 'hit_scan_type_filter', req_total: req_total, req_ok: req_ok, req_err: req_err, items: scan_items.size, filtered: scan_filtered.size, returned: [scan_filtered.size, effective_limit.to_i].min, ms: elapsed_ms(fetch_started_at))
+          return [scan_filtered.first(effective_limit), nil]
+        end
       end
     end
 
@@ -932,9 +1114,10 @@ module ArshinService
 
           uri = URI(api_base_url)
           uri.query = URI.encode_www_form(search_params)
-          log("fallback_number_search[#{idx + 1}/#{search_queries.size} org=#{org_idx + 1}/#{fallback_org_values.size}] #{uri}")
+          label = "fallback#{idx + 1}/#{search_queries.size}.org#{org_idx + 1}/#{fallback_org_values.size}"
+          profile_log('fetch_fallback_request', trace_id: trace_id, phase: phase, label: label, params: search_params.inspect)
 
-          res = arshin_execute_request(uri)
+          res = arshin_execute_request(uri, trace_id: trace_id, label: "#{phase}:#{label}")
           req_total += 1
           body = res.body.to_s.force_encoding('UTF-8')
           unless res.is_a?(Net::HTTPSuccess)
@@ -952,21 +1135,21 @@ module ArshinService
           next if by_number.empty?
 
           by_type = type_filter.empty? ? by_number : by_number.select { |item| arshin_item_matches_type?(item, type_filter) }
-          log("fallback_number_search[#{idx + 1}/#{org_idx + 1}] items=#{items.size} by_number=#{by_number.size} by_type=#{by_type.size}")
+          profile_log('fetch_fallback_filter', trace_id: trace_id, phase: phase, label: label, items: items.size, by_number: by_number.size, by_type: by_type.size)
 
           selected = by_type.empty? ? by_number : by_type
+          profile_log('fetch_done', trace_id: trace_id, phase: phase, result: 'hit_fallback_number_search', req_total: req_total, req_ok: req_ok, req_err: req_err, selected: selected.size, returned: [selected.size, effective_limit.to_i].min, ms: elapsed_ms(fetch_started_at))
           return [return_full ? selected.first(effective_limit) : selected.first(effective_limit), nil]
         end
       end
     end
 
-    profile_log('fetch_done', req_total: req_total, req_ok: req_ok, req_err: req_err, ms: elapsed_ms(fetch_started_at), variants: primary_param_variants.size + fallback_param_variants.size, had_success: had_success_response, err: last_error.to_s[0, 120])
-    log("fetch_by_params no_results had_success=#{had_success_response} last_error=#{last_error.inspect}")
+    profile_log('fetch_done', trace_id: trace_id, phase: phase, result: 'empty', req_total: req_total, req_ok: req_ok, req_err: req_err, ms: elapsed_ms(fetch_started_at), variants: primary_param_variants.size + fallback_param_variants.size, had_success: had_success_response, err: last_error.to_s[0, 120])
     return [nil, last_error] if last_error && !had_success_response
 
     [[], nil]
   rescue => e
-    log("fetch_by_params exception=#{e.class}: #{e.message}")
+    profile_log('fetch_exception', trace_id: trace_id, phase: phase, error: "#{e.class}: #{e.message}", ms: elapsed_ms(fetch_started_at || Process.clock_gettime(Process::CLOCK_MONOTONIC)))
     [nil, "#{e.class}: #{e.message}"]
   end
   private_class_method :arshin_fetch_items_by_params
@@ -977,9 +1160,23 @@ module ArshinService
   private_class_method :elapsed_ms
 
   def profile_log(event, fields = {})
-    kv = fields.map { |k, v| "#{k}=#{utf8_text(v)}" }.join(' ')
-    STDERR.puts("[ARSHIN PROFILE] event=#{event} #{kv}")
-  rescue StandardError
+    return unless profile_enabled?
+
+    safe_fields = fields.each_with_object({}) do |(key, value), memo|
+      next if value.nil?
+
+      text = utf8_text(value).gsub(/[\r\n\t]+/, ' ').strip
+      memo[key] = text.empty? ? '-' : text
+    end
+    kv = safe_fields.map { |key, value| "#{key}=#{value}" }.join(' ')
+    line = "[#{Time.now.iso8601}] event=#{event} #{kv}".strip
+    @profile_mutex.synchronize do
+      FileUtils.mkdir_p(File.dirname(profile_log_path))
+      File.open(profile_log_path, 'a', encoding: 'utf-8') { |f| f.puts(line) }
+    end
+    STDERR.puts("[ARSHIN PROFILE] #{line}") unless (ENV['ARSHIN_PROFILE_STDERR'] || '1').to_s.strip == '0'
+  rescue StandardError => e
+    STDERR.puts("[ARSHIN PROFILE ERROR] #{e.class}: #{e.message}") rescue nil
     nil
   end
   private_class_method :profile_log

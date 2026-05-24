@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { billingApi, type BillingStatusFilter } from '../../api/billing'
+import { useAuth } from '../../contexts/AuthContext'
 
 const PAGE_SIZE = 50
 
 export default function BillingHome() {
+  const { canDelete } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const page = Number(searchParams.get('page') ?? 0)
@@ -118,6 +120,7 @@ export default function BillingHome() {
                 >
                   {nextMonthMutation.isPending ? 'Создание месяца...' : 'Создать след. месяц'}
                 </button>
+                {canDelete && (
                 <button
                   className="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50"
                   onClick={() => {
@@ -129,6 +132,7 @@ export default function BillingHome() {
                 >
                   Удалить текущий месяц
                 </button>
+                )}
                 <a className="block px-3 py-2 text-sm hover:bg-gray-100" href={`/api/billing/export?status=${status}`}>Экспорт</a>
               </div>
             )}

@@ -13,7 +13,11 @@ require 'time'
 module UsersService
   module_function
 
-  USERS_FILE = File.expand_path('../storage/users.json', __dir__)
+  def users_file_path
+    raw = ENV['USERS_FILE'].to_s.strip
+    path = raw.empty? ? File.expand_path('../storage/users.json', __dir__) : raw
+    File.expand_path(path)
+  end
   PBKDF2_ITER = 200_000
   PBKDF2_KEYLEN = 32
   PBKDF2_DIGEST = 'sha256'
@@ -25,6 +29,36 @@ module UsersService
 
   def list
     load_all.map { |u| public_user(u) }
+  end
+
+  # Пользователи с заполненной должностью — для выбора «Кто составлял акт».
+  def switch_act_authors
+    load_all
+      .map { |u| public_user(u) }
+      .select { |u| !u[:position].to_s.strip.empty? }
+      .map do |u|
+        name = u[:name].to_s.strip
+        display = name.empty? ? u[:login].to_s : name
+        { login: u[:login], name: display }
+      end
+      .sort_by { |u| u[:name].to_s.downcase }
+  end
+
+  def resolve_switch_act_author(selected)
+    text = selected.to_s.strip
+    return nil if text.empty?
+
+    hit = switch_act_authors.find do |a|
+      a[:name] == text || normalize(a[:login]) == normalize(text)
+    end
+    return nil unless hit
+
+    user = find(hit[:login])
+    {
+      login: hit[:login],
+      name: hit[:name],
+      position: user ? user[:position].to_s.strip : ''
+    }
   end
 
   def find(login)
@@ -293,9 +327,10 @@ module UsersService
   end
 
   def load_all_unlocked
-    return [] unless File.exist?(USERS_FILE)
+    path = users_file_path
+    return [] unless File.exist?(path)
 
-    raw = JSON.parse(File.read(USERS_FILE))
+    raw = JSON.parse(File.read(path))
     Array(raw).map do |u|
       {
         login: u['login'].to_s,
@@ -319,10 +354,11 @@ module UsersService
   end
 
   def save_all(users)
-    FileUtils.mkdir_p(File.dirname(USERS_FILE))
-    tmp = "#{USERS_FILE}.tmp"
+    path = users_file_path
+    FileUtils.mkdir_p(File.dirname(path))
+    tmp = "#{path}.tmp"
     File.write(tmp, JSON.pretty_generate(users.map { |u| u.transform_keys(&:to_s) }))
-    File.rename(tmp, USERS_FILE)
+    File.rename(tmp, path)
   end
 
   # ---- Session secret (стабильный между перезапусками) ----

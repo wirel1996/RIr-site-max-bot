@@ -3,6 +3,7 @@
 require 'json'
 require 'date'
 require 'roo'
+require 'roo-xls'
 require 'securerandom'
 
 require_relative '../storage/water_registry_db'
@@ -236,7 +237,7 @@ module WaterRegistryService
   end
 
   def import_file(path, filename: nil)
-    book = Roo::Spreadsheet.open(path)
+    book = open_spreadsheet(path)
     sheet = book.sheet(0)
     raise ArgumentError, 'лист с реестром не найден' unless sheet
 
@@ -446,8 +447,18 @@ module WaterRegistryService
   end
   private_class_method :selected_uute_for_contact
 
+  def open_spreadsheet(path)
+    ext = File.extname(path.to_s).downcase
+    if ext == '.xls'
+      Roo::Excel.new(path)
+    else
+      Roo::Spreadsheet.open(path)
+    end
+  end
+  private_class_method :open_spreadsheet
+
   def import_disconnections(path, filename: nil)
-    book = Roo::Spreadsheet.open(path)
+    book = open_spreadsheet(path)
     sheet_name = book.sheets.include?(DISCONNECT_SHEET) ? DISCONNECT_SHEET : book.sheets.first
     sheet = book.sheet(sheet_name)
     raise ArgumentError, 'лист с отключениями не найден' unless sheet

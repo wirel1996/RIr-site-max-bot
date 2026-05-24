@@ -20,7 +20,17 @@ export default function ObjectsList() {
     <div className="space-y-4">
       <nav className="text-sm"><Link to="/objects" className="text-blue-600 hover:underline">← Объекты</Link></nav>
       <div className="rounded-lg bg-white p-5 shadow">
-        <h1 className="text-2xl font-bold">Объекты {label}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold">Объекты {label}</h1>
+          {category && (
+            <a
+              href={objectsApi.switchEventsExportUrl(category, 'full')}
+              className="inline-flex items-center justify-center rounded border bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Выгрузка
+            </a>
+          )}
+        </div>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени, адресу, UID" className="mt-3 w-full rounded border px-3 py-2 text-sm sm:max-w-xl" />
       </div>
       <div className="rounded-lg bg-white p-5 shadow">

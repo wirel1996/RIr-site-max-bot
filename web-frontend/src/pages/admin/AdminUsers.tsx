@@ -98,8 +98,10 @@ export default function AdminUsers() {
   const [dbBackupNotifyDraft, setDbBackupNotifyDraft] = useState('')
   const dailyNotifyTime = maxUsersQuery.data?.daily_tasks_notify_time || '08:00'
   const meteringActCounter = maxUsersQuery.data?.metering_act_counter
+  const objectSwitchActCounter = maxUsersQuery.data?.object_switch_act_counter
   const [actCounterYear, setActCounterYear] = useState(new Date().getFullYear())
   const [actCounterNext, setActCounterNext] = useState('1')
+  const [objectSwitchActCounterNext, setObjectSwitchActCounterNext] = useState('1')
   const canDeleteSelected = editForm && currentUser?.login !== editForm.login
 
   useEffect(() => {
@@ -111,6 +113,11 @@ export default function AdminUsers() {
     setActCounterYear(meteringActCounter.year)
     setActCounterNext(String(meteringActCounter.next_number))
   }, [meteringActCounter?.year, meteringActCounter?.next_number])
+
+  useEffect(() => {
+    if (!objectSwitchActCounter) return
+    setObjectSwitchActCounterNext(String(objectSwitchActCounter.next_number))
+  }, [objectSwitchActCounter?.next_number])
 
   const createMutation = useMutation({
     mutationFn: () => adminApi.createUser(createForm),
@@ -201,6 +208,17 @@ export default function AdminUsers() {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
     },
     onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось сохранить нумерацию'),
+  })
+  const objectSwitchActCounterMutation = useMutation({
+    mutationFn: () =>
+      adminApi.updateObjectSwitchActCounter({
+        next_number: Number(objectSwitchActCounterNext) || 1,
+      }),
+    onSuccess: async (res) => {
+      setMessage(`Нумерация актов включения/отключения: следующий № ${res.object_switch_act_counter.next_number}`)
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'max-users'] })
+    },
+    onError: (e: { message?: string }) => setMessage(e.message || 'Не удалось сохранить нумерацию включений/отключений'),
   })
   const billingCreatorsMutation = useMutation({
     mutationFn: (logins: string[]) => adminApi.updateBillingMonthCreators(logins),
@@ -346,6 +364,30 @@ export default function AdminUsers() {
                 className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {t.notifications.meteringActCounterSave}
+              </button>
+            </div>
+          </section>
+          <section className="rounded-lg bg-white p-4 shadow">
+            <h2 className="mb-3 text-lg font-semibold">Нумерация актов включения/отключения</h2>
+            <p className="mb-3 text-xs text-gray-600">Сквозной номер для актов включения и отключения в карточках объектов.</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm">
+                <div className="mb-1 text-gray-600">Следующий № акта</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={objectSwitchActCounterNext}
+                  onChange={(e) => setObjectSwitchActCounterNext(e.target.value)}
+                  className="w-28 rounded border px-3 py-2 text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={objectSwitchActCounterMutation.isPending}
+                onClick={() => objectSwitchActCounterMutation.mutate()}
+                className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Сохранить
               </button>
             </div>
           </section>
