@@ -1,0 +1,17 @@
+[Unit]
+Description=MAX Bot (max_bot)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/max_bot
+Environment=TZ=Asia/Novosibirsk
+ExecStart=/usr/bin/ruby /opt/max_bot/bot.rb
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/max_bot/log/max.log
+StandardError=append:/opt/max_bot/log/max_stderr.log
+
+[Install]
+WantedBy=multi-user.target

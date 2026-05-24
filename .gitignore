@@ -13,6 +13,9 @@ caddy/cert.reg.ru.bak/
 # DB backups (local only)
 storage/backups/
 
+# Migration pack (secrets + DB)
+migrate-pack.zip
+
 # Logs and temp
 log/
 tmp/

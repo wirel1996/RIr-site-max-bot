@@ -1,0 +1,43 @@
+{
+	email riryvedomleniya@yandex.ru
+	storage file_system /opt/max_bot/caddy/data
+
+	log default {
+		output file /opt/max_bot/log/caddy.log {
+			roll_size 5mb
+			roll_keep 3
+		}
+		level WARN
+		exclude http.log.access
+	}
+}
+
+северскокэ.рф, www.северскокэ.рф {
+	encode zstd gzip
+
+	@log_skip_ping path /api/auth/ping /api/journal/week-status /favicon.ico /manifest.json /robots.txt
+	@log_skip_static path_regexp \.(js|css|ico|png|jpe?g|gif|svg|woff2?|ttf|map)$
+
+	log_skip @log_skip_ping
+	log_skip @log_skip_static
+
+	log {
+		output file /opt/max_bot/log/caddy_access.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+	}
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:4567 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		root * /opt/max_bot/web-frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=MAX Bot Web API (Sinatra)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/max_bot
+Environment=TZ=Asia/Novosibirsk
+Environment=CONTACTS_WEB_BIND=127.0.0.1
+Environment=CONTACTS_WEB_PORT=4567
+Environment=CONTACTS_WEB_ENV=production
+ExecStart=/usr/bin/ruby /opt/max_bot/web/app.rb
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/max_bot/log/web_stdout.log
+StandardError=append:/opt/max_bot/log/web_stderr.log
+
+[Install]
+WantedBy=multi-user.target

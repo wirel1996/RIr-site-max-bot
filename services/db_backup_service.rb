@@ -93,11 +93,20 @@ module DbBackupService
   end
 
   def compress_to_zip(source_dir, zip_path)
-    ps = "Compress-Archive -Path '#{source_dir}\\*' -DestinationPath '#{zip_path}' -Force"
-    stdout, stderr, status = Open3.capture3('powershell', '-NoProfile', '-Command', ps)
+    if Gem.win_platform?
+      ps = "Compress-Archive -Path '#{source_dir}\\*' -DestinationPath '#{zip_path}' -Force"
+      stdout, stderr, status = Open3.capture3('powershell', '-NoProfile', '-Command', ps)
+      return true if status.success?
+
+      raise "Compress-Archive failed: #{stderr.to_s.strip.empty? ? stdout.to_s.strip : stderr.to_s.strip}"
+    end
+
+    parent = File.dirname(zip_path)
+    FileUtils.mkdir_p(parent) unless File.directory?(parent)
+    stdout, stderr, status = Open3.capture3('zip', '-r', '-q', zip_path, '.', chdir: source_dir)
     return true if status.success?
 
-    raise "Compress-Archive failed: #{stderr.to_s.strip.empty? ? stdout.to_s.strip : stderr.to_s.strip}"
+    raise "zip failed: #{stderr.to_s.strip.empty? ? stdout.to_s.strip : stderr.to_s.strip}"
   end
   private_class_method :compress_to_zip
 end
