@@ -6,6 +6,10 @@
 data/
 *.db
 
+# Caddy TLS (Let's Encrypt storage + reg.ru backup on server)
+caddy/data/
+caddy/cert.reg.ru.bak/
+
 # Logs and temp
 log/
 tmp/

@@ -1,15 +1,51 @@
 {
-	# Не слушаем 80 (там IIS / Взлёт-веб), без авто-редиректов.
-	auto_https off
+	# Let's Encrypt (ACME): автопродление TLS. Порт 80 занят IIS — только TLS-ALPN на :443.
+	email riryvedomleniya@yandex.ru
+	auto_https disable_redirects
+	storage file_system C:/max_bot/caddy/data
+
+	# Служебные логи Caddy (TLS, прокси, ошибки) — файл с ротацией.
+	log default {
+		output file C:/max_bot/log/caddy.log {
+			roll_size 5mb
+			roll_keep 3
+		}
+		level WARN
+		exclude http.log.access
+	}
 }
 
 северскокэ.рф:443, www.северскокэ.рф:443 {
 	encode zstd gzip
 
-	# Статический сертификат от reg.ru / GlobalSign (выдан до 2026-11-23).
-	tls C:/max_bot/caddy/cert/fullchain.pem C:/max_bot/caddy/cert/key.pem
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
 
-	# 1. Только /api/* проксируем в Sinatra. Basic Auth на этом уровне.
+	# Шум: keepalive сессии, статика — не пишем в access-лог.
+	@log_skip_ping path /api/auth/ping /favicon.ico /manifest.json /robots.txt
+	@log_skip_static path_regexp \.(js|css|ico|png|jpe?g|gif|svg|woff2?|ttf|map)$
+
+	log_skip @log_skip_ping
+	log_skip @log_skip_static
+
+	log {
+		output file C:/max_bot/log/caddy_access.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+		format filter {
+			wrap json
+			fields {
+				request>headers delete
+				resp_headers delete
+				tls delete
+			}
+		}
+	}
+
 	@api path /api/*
 	handle @api {
 		reverse_proxy 127.0.0.1:4567 {
@@ -17,17 +53,9 @@
 		}
 	}
 
-	# 2. Всё остальное — статика React-приложения с SPA fallback на index.html.
 	handle {
 		root * C:/max_bot/web-frontend/dist
 		try_files {path} /index.html
 		file_server
-	}
-
-	log {
-		output file C:/max_bot/log/caddy_access.log {
-			roll_size 10mb
-			roll_keep 5
-		}
 	}
 }

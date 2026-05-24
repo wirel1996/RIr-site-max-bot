@@ -17,6 +17,9 @@ Restart-Service MaxBot
 --- ПРОВЕРИТЬ ЛОГИ ---
 Get-Content C:\max_bot\log\max.log -Tail 50
 Get-Content C:\max_bot\log\service_stderr.log -Tail 30
+Get-Content C:\max_bot\log\caddy.log -Tail 30          # Caddy: TLS, прокси, WARN+
+Get-Content C:\max_bot\log\caddy_access.log -Tail 30     # Caddy: HTTP без ping/статики
+Get-Content C:\max_bot\log\web_stderr.log -Tail 30     # Sinatra API: ошибки Ruby
 
 --- СЛЕДИТЬ ЗА ЛОГОМ В РЕАЛЬНОМ ВРЕМЕНИ ---
 Get-Content C:\max_bot\log\max.log -Wait -Tail 20
@@ -177,7 +180,7 @@ services/contacts_sync_service.rb.
 
 
 ========================================
-  HTTPS ДЛЯ САЙТА (Caddy + reg.ru SSL)
+  HTTPS ДЛЯ САЙТА (Caddy + Let's Encrypt)
 ========================================
 
 Сайт https://северскокэ.рф/ обслуживается:
@@ -187,37 +190,34 @@ services/contacts_sync_service.rb.
   - IIS на :80 хостит Взлёт-веб (/sp/), наружу 80 не пробрасывать
     либо смириться с тем, что http://северскокэ.рф/ покажет IIS-страничку.
 
-Сертификат:
-  - Issuer: GlobalSign DV (через reg.ru, бесплатный с доменом).
-  - Файлы: C:\max_bot\caddy\cert\
-      cert.pem      — лиф-сертификат
-      chain.pem     — intermediate + root
-      fullchain.pem — leaf + intermediate + root (используется в Caddy)
-      key.pem       — приватный ключ (chmod 0600!)
-  - Срок: 6 месяцев. Дата окончания текущего — в начале файла
-    cert.pem (поле `notAfter`) или через:
-      openssl x509 -in C:\max_bot\caddy\cert\cert.pem -noout -dates
+Логи Caddy (C:\max_bot\log\):
+  caddy.log          — служебные WARN/ERROR: TLS, сертификат, 502 к Sinatra.
+                       Ротация 5 МБ × 3 файла.
+  caddy_access.log   — HTTP access без шума (/api/auth/ping, js/css не пишутся).
+                       Ротация 10 МБ × 3 файла. Нужен для 404/403/502 и API.
+  caddy_stderr.log   — NSSM перехватывает stderr; access-лог туда больше не идёт.
+                       Должен оставаться пустым или почти пустым.
+  web_stderr.log     — ошибки Ruby/Sinatra (MaxBotWeb).
+  max.log            — бот MAX.
 
-Перевыпуск сертификата (когда срок подойдёт):
-  1. В личном кабинете reg.ru → SSL-сертификаты → Перевыпуск.
-  2. Скачать новые файлы (cert + private key + chain).
-  3. Положить новые `cert.pem`, `chain.pem`, `key.pem` в
-     C:\max_bot\caddy\cert\, заменив старые.
-  4. Пересобрать fullchain:
-       cd C:\max_bot\caddy\cert
-       cmd /c "type cert.pem chain.pem > fullchain.pem"
-  5. Restart-Service CaddyContacts
-  6. Проверить: openssl s_client -connect северскокэ.рф:443 -servername северскокэ.рф
-     должен выдать notAfter с новой датой.
+  Раньше caddy_stderr.log раздувался до сотен МБ, потому что Caddy по умолчанию
+  писал каждый HTTP-запрос (включая ping каждые несколько секунд с каждой вкладки)
+  в stderr. Сейчас это отключено в caddy\Caddyfile.
 
-Если reg.ru не даёт скачать private.key (бывает с бесплатными DV) — есть
-запасной путь: сгенерировать свою пару (key + CSR) на сервере и
-запросить перевыпуск под СВОЙ CSR (тогда ключ остаётся у нас навсегда).
-Команды для генерации — лежат в `caddy/cert/key.pem` уже есть готовый,
-если нужно сгенерить с нуля — спроси Claude или используй openssl:
-  openssl genrsa -out new.key 4096
-  openssl req -new -key new.key -out new.csr -subj "/C=RU/CN=северскокэ.рф" \
-              -addext "subjectAltName=DNS:северскокэ.рф,DNS:www.северскокэ.рф"
+Сертификат TLS (Let's Encrypt, автоматически):
+  - Caddy сам получает и продлевает сертификат (ACME).
+  - Email для уведомлений LE: riryvedomleniya@yandex.ru (в caddy\Caddyfile).
+  - Хранилище: C:\max_bot\caddy\data\ (ключи и .crt, не коммитить в git).
+  - Проверка ACME: TLS-ALPN на :443 (порт 80 занят IIS, HTTP-challenge отключён).
+  - Старый сертификат reg.ru/GlobalSign: C:\max_bot\caddy\cert.reg.ru.bak\
+
+  Проверить в браузере: замок → «Let's Encrypt» / «E7» / «R3».
+  При ошибках продления: Get-Content C:\max_bot\log\caddy.log -Tail 50
+
+  Откат на reg.ru (если LE сломался):
+  1. Вернуть папку cert.reg.ru.bak → cert
+  2. В Caddyfile снова auto_https off и tls ... fullchain.pem key.pem
+  3. Restart-Service CaddyContacts
 
 Веб-интерфейс контактов доступен извне:
   https://северскокэ.рф/   (basic auth, пароль в .env CONTACTS_WEB_PASSWORD)
