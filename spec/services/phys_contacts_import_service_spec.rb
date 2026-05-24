@@ -9,6 +9,13 @@ require_relative '../../storage/water_registry_db'
 RSpec.describe PhysContactsImportService do
   let(:fixture_path) { File.expand_path('../fixtures/files/phys_import_sample.xls', __dir__) }
 
+  before(:all) do
+    path = File.expand_path('../fixtures/files/phys_import_sample.xls', __dir__)
+    unless File.exist?(path)
+      system('ruby', File.expand_path('../../scripts/generate_phys_import_fixture.rb', __dir__), exception: true)
+    end
+  end
+
   describe '.parse_file' do
     it 'maps headers and skips empty rows' do
       rows = described_class.parse_file(fixture_path)
